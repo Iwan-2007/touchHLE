@@ -1,0 +1,83 @@
+diff --git a/src/libc/stdio/printf.rs b/src/libc/stdio/printf.rs
+index 951dfb38..4a6dda79 100644
+--- a/src/libc/stdio/printf.rs
++++ b/src/libc/stdio/printf.rs
+@@ -66,14 +66,15 @@ pub fn printf_inner<const NS_LOG: bool, F: Fn(&Mem, GuestUSize) -> u8>(
+             false
+         };
+ 
+-        if get_format_char(&env.mem, format_char_idx) == b'#' {
+-            // Alternative form handling
++        // Alternative form ('#'): only changes the output of %x/%X (0x
++        // prefix), %f/%e with precision 0 (keeps the '.') and %g (keeps
++        // trailing zeros). For the other specifiers it does nothing.
++        let alt_form = if get_format_char(&env.mem, format_char_idx) == b'#' {
+             format_char_idx += 1;
+-            // TODO: other specifiers
+-            assert!(get_format_char(&env.mem, format_char_idx) == b'.');
+-            // TODO: other cases
+-            assert!(get_format_char(&env.mem, format_char_idx + 2) == b'd');
+-        }
++            true
++        } else {
++            false
++        };
+ 
+         let pad_char = if get_format_char(&env.mem, format_char_idx) == b'0' {
+             format_char_idx += 1;
+@@ -334,6 +335,7 @@ pub fn printf_inner<const NS_LOG: bool, F: Fn(&Mem, GuestUSize) -> u8>(
+             b'x' => {
+                 assert!(!prepend_sign);
+                 assert!(!left_justified);
++                assert!(!alt_form || pad_width == 0); // TODO
+                 // Note: on 32-bit system unsigned int and unsigned long
+                 // are u32, so length_modifier is ignored
+                 let uint: u32 = if length_modifier == Some("ll") {
+@@ -367,6 +369,9 @@ pub fn printf_inner<const NS_LOG: bool, F: Fn(&Mem, GuestUSize) -> u8>(
+                         }
+                         format!("{uint:x}")
+                     };
++                    if alt_form && uint != 0 {
++                        res.extend_from_slice(b"0x");
++                    }
+                     res.extend_from_slice(tmp.as_bytes());
+                 }
+             }
+@@ -374,6 +379,7 @@ pub fn printf_inner<const NS_LOG: bool, F: Fn(&Mem, GuestUSize) -> u8>(
+                 assert!(!prepend_sign);
+                 assert!(!left_justified);
+                 assert!(precision.is_none());
++                assert!(!alt_form || pad_width == 0); // TODO
+                 // Note: on 32-bit system unsigned int and unsigned long
+                 // are u32, so length_modifier is ignored
+                 let uint: u32 = if length_modifier == Some("ll") {
+@@ -399,6 +405,9 @@ pub fn printf_inner<const NS_LOG: bool, F: Fn(&Mem, GuestUSize) -> u8>(
+                         write!(&mut res, "{uint:>pad_width$X}").unwrap();
+                     }
+                 } else {
++                    if alt_form && uint != 0 {
++                        res.extend_from_slice(b"0X");
++                    }
+                     res.extend_from_slice(format!("{uint:X}").as_bytes());
+                 }
+             }
+@@ -428,6 +437,9 @@ pub fn printf_inner<const NS_LOG: bool, F: Fn(&Mem, GuestUSize) -> u8>(
+ 
+                 let formatted = f_format(float, pad_width, pad_char, precision);
+                 res.extend_from_slice(formatted.as_bytes());
++                if alt_form && precision == 0 {
++                    res.push(b'.');
++                }
+             }
+             b'e' => {
+                 assert!(!prepend_sign);
+@@ -473,8 +485,7 @@ pub fn printf_inner<const NS_LOG: bool, F: Fn(&Mem, GuestUSize) -> u8>(
+ 
+                     let result = f_format(float, pad_width, pad_char, precision);
+ 
+-                    // TODO: skip if alternative representation is requested
+-                    let trimmed_result = if result.contains('.') {
++                    let trimmed_result = if result.contains('.') && !alt_form {
+                         result.trim_end_matches('0').trim_end_matches('.')
+                     } else {
+                         &result
