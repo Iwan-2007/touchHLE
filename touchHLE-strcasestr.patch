@@ -1,0 +1,58 @@
+diff --git a/src/libc/ctype.rs b/src/libc/ctype.rs
+index fa414db..5e7ac65 100644
+--- a/src/libc/ctype.rs
++++ b/src/libc/ctype.rs
+@@ -149,10 +149,18 @@ fn get_default_rune_locale(env: &mut Environment) -> ConstVoidPtr {
+         .cast_const()
+ }
+ 
+-pub const CONSTANTS: ConstantExports = &[(
+-    "__DefaultRuneLocale",
+-    HostConstant::Custom(get_default_rune_locale),
+-)];
++pub const CONSTANTS: ConstantExports = &[
++    (
++        "__DefaultRuneLocale",
++        HostConstant::Custom(get_default_rune_locale),
++    ),
++    // `MB_CUR_MAX`: max bytes per character in the current locale. Read by
++    // libstdc++'s codecvt. 1 matches the "C" locale touchHLE assumes.
++    (
++        "___mb_cur_max",
++        HostConstant::Custom(|env| env.mem.alloc_and_write(1i32).cast_void().cast_const()),
++    ),
++];
+ 
+ pub const FUNCTIONS: FunctionExports = &[
+     export_c_func!(__tolower(_)),
+diff --git a/src/libc/string.rs b/src/libc/string.rs
+index 512c667..c1e3515 100644
+--- a/src/libc/string.rs
++++ b/src/libc/string.rs
+@@ -295,6 +295,18 @@ fn strncat(env: &mut Environment, s1: MutPtr<u8>, s2: ConstPtr<u8>, n: GuestUSiz
+ fn strstr(env: &mut Environment, string: ConstPtr<u8>, substring: ConstPtr<u8>) -> ConstPtr<u8> {
+     GenericChar::<u8>::strstr(env, string, substring)
+ }
++/// Case-insensitive `strstr` (ASCII only).
++fn strcasestr(env: &mut Environment, string: ConstPtr<u8>, substring: ConstPtr<u8>) -> ConstPtr<u8> {
++    let hay = env.mem.cstr_at(string).to_ascii_lowercase();
++    let needle = env.mem.cstr_at(substring).to_ascii_lowercase();
++    if needle.is_empty() {
++        return string;
++    }
++    match hay.windows(needle.len()).position(|w| w == needle.as_slice()) {
++        Some(pos) => string + pos as GuestUSize,
++        None => Ptr::null(),
++    }
++}
+ fn strchr(env: &mut Environment, path: ConstPtr<u8>, c: u8) -> ConstPtr<u8> {
+     GenericChar::<u8>::strchr(env, path, c)
+ }
+@@ -345,6 +357,7 @@ pub const FUNCTIONS: FunctionExports = &[
+     export_c_func!(strncasecmp(_, _, _)),
+     export_c_func!(strncat(_, _, _)),
+     export_c_func!(strstr(_, _)),
++    export_c_func!(strcasestr(_, _)),
+     export_c_func!(strchr(_, _)),
+     export_c_func!(strrchr(_, _)),
+     export_c_func!(strpbrk(_, _)),
