@@ -1,0 +1,57 @@
+diff --git a/src/frameworks/uikit/ui_view.rs b/src/frameworks/uikit/ui_view.rs
+index 3d7fe18..e6b5cfd 100644
+--- a/src/frameworks/uikit/ui_view.rs
++++ b/src/frameworks/uikit/ui_view.rs
+@@ -634,9 +634,26 @@ pub const CLASSES: ClassExports = objc_classes! {
+         multiple_touch_enabled: _,
+     } = std::mem::take(env.objc.borrow_mut(this));
+ 
++    if superview != nil {
++        // The view was over-released somewhere while still being displayed.
++        // Detach it instead of crashing, and say which view it was so the
++        // real cause can be tracked down.
++        let class: Class = msg![env; this class];
++        let class_name = env.objc.get_class_name(class).to_string();
++        log!(
++            "Warning: {} {:?} is being deallocated while still in superview {:?}, detaching it",
++            class_name,
++            this,
++            superview
++        );
++        () = msg![env; layer removeFromSuperlayer];
++        let UIViewHostObject { ref mut subviews, .. } = env.objc.borrow_mut(superview);
++        if let Some(idx) = subviews.iter().position(|&subview| subview == this) {
++            subviews.remove(idx);
++        }
++    }
+     release(env, layer);
+     assert!(view_controller == nil);
+-    assert!(superview == nil);
+     for subview in subviews {
+         env.objc.borrow_mut::<UIViewHostObject>(subview).superview = nil;
+         release(env, subview);
+diff --git a/src/libc/pthread/thread.rs b/src/libc/pthread/thread.rs
+index 8ef36b4..02e3a36 100644
+--- a/src/libc/pthread/thread.rs
++++ b/src/libc/pthread/thread.rs
+@@ -272,6 +272,12 @@ pub fn pthread_self(env: &mut Environment) -> pthread_t {
+     ptr
+ }
+ 
++fn pthread_cancel(_env: &mut Environment, thread: pthread_t) -> i32 {
++    // Cancellation isn't supported. Apps typically only do this when quitting.
++    log!("TODO: pthread_cancel({:?}) (ignored)", thread);
++    0
++}
++
+ fn pthread_join(env: &mut Environment, thread: pthread_t, retval: MutPtr<MutVoidPtr>) -> i32 {
+     let current_thread = env.current_thread;
+     let curr_pthread_t = pthread_self(env);
+@@ -423,6 +429,7 @@ pub const FUNCTIONS: FunctionExports = &[
+     export_c_func!(pthread_equal(_, _)),
+     export_c_func!(pthread_self()),
+     export_c_func!(pthread_join(_, _)),
++    export_c_func!(pthread_cancel(_)),
+     export_c_func!(pthread_detach(_)),
+     export_c_func!(pthread_setcanceltype(_, _)),
+     export_c_func!(pthread_testcancel()),
