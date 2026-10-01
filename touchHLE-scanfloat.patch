@@ -1,0 +1,100 @@
+diff --git a/src/frameworks/foundation/ns_scanner.rs b/src/frameworks/foundation/ns_scanner.rs
+index e0d2487f..6255e841 100644
+--- a/src/frameworks/foundation/ns_scanner.rs
++++ b/src/frameworks/foundation/ns_scanner.rs
+@@ -256,10 +256,95 @@ pub const CLASSES: ClassExports = objc_classes! {
+     true
+ }
+ 
++- (bool)scanFloat:(MutPtr<f32>)result {
++    match scan_float(env, this) {
++        Some(value) => {
++            if !result.is_null() {
++                env.mem.write(result, value as f32);
++            }
++            true
++        }
++        None => false,
++    }
++}
++
++- (bool)scanDouble:(MutPtr<f64>)result {
++    match scan_float(env, this) {
++        Some(value) => {
++            if !result.is_null() {
++                env.mem.write(result, value);
++            }
++            true
++        }
++        None => false,
++    }
++}
++
+ @end
+ 
+ };
+ 
++/// Shared implementation of `scanFloat:` and `scanDouble:`. On success,
++/// advances the scan location past the number and returns its value.
++fn scan_float(env: &mut Environment, scanner: id) -> Option<f64> {
++    skip_characters(env, scanner);
++
++    let &NSScannerHostObject { string, len, pos, .. } = env.objc.borrow(scanner);
++    if pos >= len {
++        return None;
++    }
++    let left: id = msg![env; string substringFromIndex:pos];
++    let st = to_rust_string(env, left);
++    let (cutoff, value) = parse_float_prefix(&st)?;
++    log_dbg!("scanFloat/Double: from '{}' -> {}", st, value);
++
++    // The number is ASCII only, so its byte length is its UTF-16 length.
++    env.objc.borrow_mut::<NSScannerHostObject>(scanner).pos = pos + cutoff as NSUInteger;
++    Some(value)
++}
++
++/// Finds the longest valid decimal floating-point number at the start of `s`
++/// (`[+-]digits[.digits][(e|E)[+-]digits]`) and returns its length in bytes
++/// and its value.
++fn parse_float_prefix(s: &str) -> Option<(usize, f64)> {
++    let b = s.as_bytes();
++    let mut i = 0;
++    if i < b.len() && (b[i] == b'+' || b[i] == b'-') {
++        i += 1;
++    }
++    let mut digits = 0;
++    while i < b.len() && b[i].is_ascii_digit() {
++        i += 1;
++        digits += 1;
++    }
++    if i < b.len() && b[i] == b'.' {
++        i += 1;
++        while i < b.len() && b[i].is_ascii_digit() {
++            i += 1;
++            digits += 1;
++        }
++    }
++    if digits == 0 {
++        return None;
++    }
++    // Only take the exponent if it actually has digits.
++    if i < b.len() && (b[i] == b'e' || b[i] == b'E') {
++        let mut j = i + 1;
++        if j < b.len() && (b[j] == b'+' || b[j] == b'-') {
++            j += 1;
++        }
++        if j < b.len() && b[j].is_ascii_digit() {
++            while j < b.len() && b[j].is_ascii_digit() {
++                j += 1;
++            }
++            i = j;
++        }
++    }
++    // Rust's parser accepts forms like "1." and ".5" just like C does.
++    let value: f64 = s[..i].parse().ok()?;
++    Some((i, value))
++}
++
+ // Helper functions, skips characters from `charactersToBeSkipped` set
+ fn skip_characters(env: &mut Environment, scanner: id) {
+     let &NSScannerHostObject {
