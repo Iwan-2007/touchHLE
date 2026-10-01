@@ -730,7 +730,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(realpath(_, _)),
     export_c_func_aliased!("realpath$DARWIN_EXTSN", realpath(_, _)),
     export_c_func!(mbstowcs(_, _, _)),
-    export_c_func!(mbsrtowcs(_, _, _, _, _)),
+    export_c_func!(mbsrtowcs(_, _, _, _)),
     export_c_func!(wcstombs(_, _, _)),
     export_c_func!(system(_)),
     export_c_func!(fcvt(_, _, _, _)),
