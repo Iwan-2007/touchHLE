@@ -1,0 +1,194 @@
+diff --git a/src/frameworks/core_foundation/cf_array.rs b/src/frameworks/core_foundation/cf_array.rs
+index 261fc5a..934a09c 100644
+--- a/src/frameworks/core_foundation/cf_array.rs
++++ b/src/frameworks/core_foundation/cf_array.rs
+@@ -9,10 +9,11 @@
+ //! implementation. Here they are the same types.
+ 
+ use super::cf_allocator::{kCFAllocatorDefault, CFAllocatorRef};
+-use super::CFIndex;
++use super::{CFComparisonResult, CFIndex, CFRange};
++use crate::abi::{CallFromHost, GuestFunction};
+ use crate::dyld::{export_c_func, FunctionExports};
+-use crate::frameworks::foundation::NSUInteger;
+-use crate::mem::ConstVoidPtr;
++use crate::frameworks::foundation::{ns_array, NSUInteger};
++use crate::mem::{ConstVoidPtr, MutVoidPtr};
+ use crate::objc::{id, msg, msg_class};
+ use crate::Environment;
+ 
+@@ -54,10 +55,57 @@ fn CFArrayRemoveValueAtIndex(env: &mut Environment, array: CFMutableArrayRef, id
+     msg![env; array removeObjectAtIndex:idx]
+ }
+ 
++fn CFArrayCreateMutableCopy(
++    env: &mut Environment,
++    allocator: CFAllocatorRef,
++    capacity: CFIndex,
++    array: CFArrayRef,
++) -> CFMutableArrayRef {
++    assert!(allocator == kCFAllocatorDefault || env.mem.read(allocator).is_system_default()); // unimplemented
++    assert!(capacity == 0); // TODO: fixed capacity support
++
++    let new: id = msg_class![env; _touchHLE_NSMutableArray_non_retaining new];
++    let count: NSUInteger = msg![env; array count];
++    for i in 0..count {
++        let value: id = msg![env; array objectAtIndex:i];
++        () = msg![env; new addObject:value];
++    }
++    new
++}
++
++fn CFArrayRemoveAllValues(env: &mut Environment, array: CFMutableArrayRef) {
++    // Removing one by one (from the end) lets each array class apply its own
++    // retain/release rules.
++    let count: NSUInteger = msg![env; array count];
++    for i in (0..count).rev() {
++        () = msg![env; array removeObjectAtIndex:i];
++    }
++}
++
++fn CFArraySortValues(
++    env: &mut Environment,
++    array: CFMutableArrayRef,
++    range: CFRange,
++    comparator: GuestFunction, // CFComparatorFunction
++    context: MutVoidPtr,
++) {
++    let start: usize = range.location.try_into().unwrap();
++    let len: usize = range.length.try_into().unwrap();
++    ns_array::sort_range_in_place(env, array, start, len, &mut |env, a, b| {
++        let a: ConstVoidPtr = a.cast().cast_const();
++        let b: ConstVoidPtr = b.cast().cast_const();
++        let res: CFComparisonResult = comparator.call_from_host(env, (a, b, context));
++        res
++    });
++}
++
+ pub const FUNCTIONS: FunctionExports = &[
+     export_c_func!(CFArrayCreateMutable(_, _, _)),
+     export_c_func!(CFArrayGetCount(_)),
+     export_c_func!(CFArrayGetValueAtIndex(_, _)),
+     export_c_func!(CFArrayAppendValue(_, _)),
+     export_c_func!(CFArrayRemoveValueAtIndex(_, _)),
++    export_c_func!(CFArrayCreateMutableCopy(_, _, _)),
++    export_c_func!(CFArrayRemoveAllValues(_)),
++    export_c_func!(CFArraySortValues(_, _, _, _)),
+ ];
+diff --git a/src/frameworks/foundation/ns_array.rs b/src/frameworks/foundation/ns_array.rs
+index 18f809a..ec52a56 100644
+--- a/src/frameworks/foundation/ns_array.rs
++++ b/src/frameworks/foundation/ns_array.rs
+@@ -869,3 +869,26 @@ fn encode_with_coder_inner(env: &mut Environment, arr: id, coder: id) {
+     let scope = get_value_to_encode_for_current_key(env, coder);
+     scope.insert("NS.objects".to_string(), plist::Value::Array(encoded_vals));
+ }
++
++/// Used by `CFArraySortValues`: stable in-place sort of `len` elements starting
++/// at `start`, using a comparator that returns <0, 0 or >0. Retain counts are
++/// not touched, so this is safe for both retaining and non-retaining arrays.
++pub(crate) fn sort_range_in_place(
++    env: &mut Environment,
++    array: id,
++    start: usize,
++    len: usize,
++    compare: &mut dyn FnMut(&mut Environment, id, id) -> i32,
++) {
++    // Take the vector out so the comparator can call back into the guest.
++    let mut v = std::mem::take(&mut env.objc.borrow_mut::<ArrayHostObject>(array).array);
++    let end = (start + len).min(v.len());
++    for i in (start + 1)..end {
++        let mut j = i;
++        while j > start && compare(env, v[j - 1], v[j]) > 0 {
++            v.swap(j - 1, j);
++            j -= 1;
++        }
++    }
++    env.objc.borrow_mut::<ArrayHostObject>(array).array = v;
++}
+diff --git a/src/frameworks/uikit/ui_application.rs b/src/frameworks/uikit/ui_application.rs
+index 51a41f7..edfe33a 100644
+--- a/src/frameworks/uikit/ui_application.rs
++++ b/src/frameworks/uikit/ui_application.rs
+@@ -7,6 +7,7 @@
+ 
+ use super::ui_device::*;
+ use crate::dyld::{export_c_func, ConstantExports, FunctionExports, HostConstant};
++use crate::frameworks::core_graphics::{CGPoint, CGRect, CGSize};
+ use crate::frameworks::foundation::ns_string::{from_rust_string, get_static_str};
+ use crate::frameworks::foundation::{ns_array, ns_string, NSInteger, NSUInteger};
+ use crate::mem::MutPtr;
+@@ -93,6 +94,18 @@ pub const CLASSES: ClassExports = objc_classes! {
+     }
+ }
+ 
++- (CGRect)statusBarFrame {
++    // Classic iPhone status bar: 20 points high, zero-sized when hidden.
++    let hidden = env.framework_state.uikit.ui_application.status_bar_hidden;
++    CGRect {
++        origin: CGPoint { x: 0.0, y: 0.0 },
++        size: CGSize {
++            width: if hidden { 0.0 } else { 320.0 },
++            height: if hidden { 0.0 } else { 20.0 },
++        },
++    }
++}
++
+ - (bool)isStatusBarHidden {
+     env.framework_state.uikit.ui_application.status_bar_hidden
+ }
+diff --git a/src/libc/arpa/inet.rs b/src/libc/arpa/inet.rs
+index 746d3cf..93252ea 100644
+--- a/src/libc/arpa/inet.rs
++++ b/src/libc/arpa/inet.rs
+@@ -32,6 +32,25 @@ fn inet_addr(env: &mut Environment, str: ConstPtr<u8>) -> in_addr_t {
+     res
+ }
+ 
++fn inet_aton(env: &mut Environment, cp: ConstPtr<u8>, inp: MutPtr<in_addr>) -> i32 {
++    // Returns 1 for a valid dotted address, 0 otherwise (no errno).
++    let Some(address) = env
++        .mem
++        .cstr_at_utf8(cp)
++        .ok()
++        .and_then(|s| s.parse::<Ipv4Addr>().ok())
++    else {
++        return 0;
++    };
++    if !inp.is_null() {
++        let addr = in_addr {
++            s_addr: u32::from_le_bytes(address.octets()),
++        };
++        env.mem.write(inp, addr);
++    }
++    1
++}
++
+ fn inet_ntop(
+     env: &mut Environment,
+     af: i32,
+@@ -68,6 +87,7 @@ fn inet_pton(env: &mut Environment, af: i32, src: ConstPtr<u8>, dst: MutVoidPtr)
+ 
+ pub const FUNCTIONS: FunctionExports = &[
+     export_c_func!(inet_addr(_)),
++    export_c_func!(inet_aton(_, _)),
+     export_c_func!(inet_ntop(_, _, _, _)),
+     export_c_func!(inet_pton(_, _, _)),
+ ];
+diff --git a/src/libc/sched.rs b/src/libc/sched.rs
+index c61e28b..676cdaf 100644
+--- a/src/libc/sched.rs
++++ b/src/libc/sched.rs
+@@ -16,4 +16,11 @@ fn sched_yield(env: &mut Environment) -> i32 {
+     0 // success
+ }
+ 
+-pub const FUNCTIONS: FunctionExports = &[export_c_func!(sched_yield())];
++fn pthread_yield_np(env: &mut Environment) {
++    sched_yield(env);
++}
++
++pub const FUNCTIONS: FunctionExports = &[
++    export_c_func!(sched_yield()),
++    export_c_func!(pthread_yield_np()),
++];
