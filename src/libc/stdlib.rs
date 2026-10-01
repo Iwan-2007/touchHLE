@@ -573,7 +573,48 @@ fn mbstowcs(
     }
     to_write
 }
+fn mbsrtowcs(
+    env: &mut Environment,
+    dst: MutPtr<wchar_t>,
+    src: MutPtr<ConstPtr<u8>>,
+    len: GuestUSize,
+    _ps: MutPtr<u8>,
+) -> GuestUSize {
+    set_errno(env, 0);
 
+    let ctype_locale = setlocale(env, LC_CTYPE, Ptr::null());
+    assert_eq!(env.mem.read(ctype_locale), b'C');
+
+    assert!(!src.is_null());
+
+    let s = env.mem.read(src);
+
+    if s.is_null() {
+        return 0;
+    }
+
+    let size = strlen(env, s);
+
+    if dst.is_null() {
+        return size;
+    }
+
+    let to_write = size.min(len);
+
+    for i in 0..to_write {
+        let c = env.mem.read(s + i);
+        env.mem.write(dst + i, c as wchar_t);
+    }
+
+    if size < len {
+        env.mem.write(dst + size, wchar_t::default());
+        env.mem.write(src, Ptr::null());
+    } else {
+        env.mem.write(src, s + to_write);
+    }
+
+    to_write
+}
 fn wcstombs(
     env: &mut Environment,
     s: ConstPtr<u8>,
@@ -689,6 +730,7 @@ pub const FUNCTIONS: FunctionExports = &[
     export_c_func!(realpath(_, _)),
     export_c_func_aliased!("realpath$DARWIN_EXTSN", realpath(_, _)),
     export_c_func!(mbstowcs(_, _, _)),
+    export_c_func!(mbsrtowcs(_, _, _, _, _)),
     export_c_func!(wcstombs(_, _, _)),
     export_c_func!(system(_)),
     export_c_func!(fcvt(_, _, _, _)),
