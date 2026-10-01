@@ -1,0 +1,17 @@
+diff --git a/src/frameworks/uikit/ui_view/ui_label.rs b/src/frameworks/uikit/ui_view/ui_label.rs
+index 9d2d026..276aa57 100644
+--- a/src/frameworks/uikit/ui_view/ui_label.rs
++++ b/src/frameworks/uikit/ui_view/ui_label.rs
+@@ -208,6 +208,12 @@ pub const CLASSES: ClassExports = objc_classes! {
+     todo_objc_setter!(this, value);
+ }
+ 
++// Only used while a label is highlighted (e.g. in a selected table cell);
++// accepted and ignored for now.
++- (())setHighlightedTextColor:(id)color { // UIColor*
++    todo_objc_setter!(this, color);
++}
++
+ - (())setOpaque:(bool)_opaque {
+     // Built-in views don't have user-controlled opaqueness.
+ }
