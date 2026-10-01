@@ -1,0 +1,58 @@
+diff --git a/src/frameworks/uikit/ui_font.rs b/src/frameworks/uikit/ui_font.rs
+index bbbc43b..6cb84a9 100644
+--- a/src/frameworks/uikit/ui_font.rs
++++ b/src/frameworks/uikit/ui_font.rs
+@@ -13,6 +13,7 @@ use crate::frameworks::foundation::ns_string::to_rust_string;
+ use crate::frameworks::foundation::NSInteger;
+ use crate::objc::{autorelease, id, msg, objc_classes, ClassExports, HostObject};
+ use crate::Environment;
++use std::borrow::Cow;
+ use std::collections::HashMap;
+ use std::ops::Range;
+ 
+@@ -223,6 +224,18 @@ fn get_font<'a>(state: &'a mut State, kind: FontKind, text: &str) -> &'a Font {
+     state.get_font_by_kind(kind)
+ }
+ 
++/// iOS draws nothing for U+0000, and some apps leave NUL characters in their
++/// strings (e.g. 4-byte `wchar_t` text decoded as UTF-16). Our fonts would
++/// draw a "missing glyph" box for each one, so drop them before measuring or
++/// drawing.
++fn strip_nul(text: &str) -> Cow<'_, str> {
++    if text.contains('\0') {
++        Cow::Owned(text.replace('\0', ""))
++    } else {
++        Cow::Borrowed(text)
++    }
++}
++
+ /// Called by the `sizeWithFont:` method family on `NSString`.
+ pub fn size_with_font(
+     env: &mut Environment,
+@@ -230,6 +243,8 @@ pub fn size_with_font(
+     text: &str,
+     constrained: Option<(CGSize, UILineBreakMode)>,
+ ) -> CGSize {
++    let text = strip_nul(text);
++    let text: &str = &text;
+     let host_object = env.objc.borrow::<UIFontHostObject>(font);
+ 
+     let font = get_font(
+@@ -327,6 +342,8 @@ pub fn draw_at_point(
+     point: CGPoint,
+     width_and_line_break_mode: Option<(CGFloat, UILineBreakMode)>,
+ ) -> CGSize {
++    let text = strip_nul(text);
++    let text: &str = &text;
+     let context = UIGraphicsGetCurrentContext(env);
+ 
+     let host_object = env.objc.borrow::<UIFontHostObject>(font);
+@@ -375,6 +392,8 @@ pub fn draw_in_rect(
+     line_break_mode: UILineBreakMode,
+     alignment: UITextAlignment,
+ ) -> CGSize {
++    let text = strip_nul(text);
++    let text: &str = &text;
+     let context = UIGraphicsGetCurrentContext(env);
+ 
+     let text_size = size_with_font(env, font, text, Some((rect.size, line_break_mode)));

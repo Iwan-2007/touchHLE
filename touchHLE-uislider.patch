@@ -1,0 +1,88 @@
+diff --git a/src/frameworks/uikit/ui_view/ui_control/ui_slider.rs b/src/frameworks/uikit/ui_view/ui_control/ui_slider.rs
+index f3878a8..f143277 100644
+--- a/src/frameworks/uikit/ui_view/ui_control/ui_slider.rs
++++ b/src/frameworks/uikit/ui_view/ui_control/ui_slider.rs
+@@ -6,7 +6,34 @@
+ //! `UISlider`.
+ 
+ use crate::frameworks::core_graphics::CGRect;
++use crate::frameworks::foundation::NSUInteger;
++use crate::mem::GuestUSize;
+ use crate::objc::{id, msg_super, objc_classes, todo_objc_setter, ClassExports};
++use std::cell::RefCell;
++use std::collections::HashMap;
++
++/// (value, minimumValue, maximumValue)
++type SliderValues = (f32, f32, f32);
++const DEFAULT_VALUES: SliderValues = (0.0, 0.0, 1.0);
++
++thread_local! {
++    /// Values of each slider, keyed by object address.
++    /// TODO: move this into a proper host object once the slider is drawn.
++    static SLIDER_VALUES: RefCell<HashMap<GuestUSize, SliderValues>> = RefCell::new(HashMap::new());
++}
++
++fn get_values(this: id) -> SliderValues {
++    SLIDER_VALUES.with(|m| m.borrow().get(&this.to_bits()).copied().unwrap_or(DEFAULT_VALUES))
++}
++fn set_values(this: id, f: impl FnOnce(&mut SliderValues)) {
++    SLIDER_VALUES.with(|m| {
++        let mut m = m.borrow_mut();
++        let values = m.entry(this.to_bits()).or_insert(DEFAULT_VALUES);
++        f(values);
++        // Keep the value inside the range, like UIKit does.
++        values.0 = values.0.max(values.1).min(values.2);
++    });
++}
+ 
+ pub const CLASSES: ClassExports = objc_classes! {
+ 
+@@ -32,7 +59,47 @@ pub const CLASSES: ClassExports = objc_classes! {
+     todo_objc_setter!(this, img);
+ }
+ 
+-// TODO: all of it
++- (())dealloc {
++    SLIDER_VALUES.with(|m| {
++        m.borrow_mut().remove(&this.to_bits());
++    });
++    msg_super![env; this dealloc]
++}
++
++- (f32)value {
++    get_values(this).0
++}
++- (())setValue:(f32)value {
++    set_values(this, |v| v.0 = value);
++}
++- (())setValue:(f32)value animated:(bool)_animated {
++    set_values(this, |v| v.0 = value);
++}
++- (f32)minimumValue {
++    get_values(this).1
++}
++- (())setMinimumValue:(f32)value {
++    set_values(this, |v| v.1 = value);
++}
++- (f32)maximumValue {
++    get_values(this).2
++}
++- (())setMaximumValue:(f32)value {
++    set_values(this, |v| v.2 = value);
++}
++
++// Appearance and behaviour settings: accepted and ignored for now, since the
++// slider isn't drawn and can't be dragged yet.
++- (())setContinuous:(bool)_continuous {
++}
++- (())setThumbImage:(id)_image forState:(NSUInteger)_state { // UIImage*
++}
++- (())setMinimumTrackImage:(id)_image forState:(NSUInteger)_state { // UIImage*
++}
++- (())setMaximumTrackImage:(id)_image forState:(NSUInteger)_state { // UIImage*
++}
++
++// TODO: the rest of it (drawing, touch tracking)
+ 
+ @end
+ 
