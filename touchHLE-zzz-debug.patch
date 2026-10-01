@@ -1,0 +1,170 @@
+diff --git a/src/frameworks/opengles/eagl.rs b/src/frameworks/opengles/eagl.rs
+index 32a0b5c..2ff9c89 100644
+--- a/src/frameworks/opengles/eagl.rs
++++ b/src/frameworks/opengles/eagl.rs
+@@ -264,6 +264,27 @@ pub const CLASSES: ClassExports = objc_classes! {
+ - (bool)presentRenderbuffer:(NSUInteger)target {
+     assert!(target == gles11::RENDERBUFFER_OES);
+ 
++    // Temporary diagnostics (touchHLE-zzz-debug.patch): summarize each of the
++    // first frames, then only frames whose content changes a lot.
++    {
++        use crate::gles::gles1_on_gl2::{DEBUG_DRAW_CALLS, DEBUG_DRAW_TEX_CALLS, DEBUG_SKINNED_DRAWS};
++        use std::sync::atomic::{AtomicU32, Ordering};
++        static FRAME: AtomicU32 = AtomicU32::new(0);
++        static LAST: AtomicU32 = AtomicU32::new(u32::MAX);
++        let frame = FRAME.fetch_add(1, Ordering::Relaxed);
++        let draws = DEBUG_DRAW_CALLS.swap(0, Ordering::Relaxed);
++        let draw_tex = DEBUG_DRAW_TEX_CALLS.swap(0, Ordering::Relaxed);
++        let skinned = DEBUG_SKINNED_DRAWS.swap(0, Ordering::Relaxed);
++        let summary = draws * 1000 + draw_tex;
++        if frame < 40 || (summary != LAST.load(Ordering::Relaxed) && frame % 30 == 0) {
++            log!(
++                "DEBUG GL frame {}: {} draw calls ({} skinned), {} glDrawTexOES",
++                frame, draws, skinned, draw_tex
++            );
++            LAST.store(summary, Ordering::Relaxed);
++        }
++    }
++
+     // The presented frame should be displayed ASAP, but the next one must be
+     // delayed, so this needs to be checked before returning.
+     let sleep_for = limit_framerate(&mut env.objc.borrow_mut::<EAGLContextHostObject>(this).next_frame_due, &env.options);
+diff --git a/src/frameworks/uikit/ui_touch.rs b/src/frameworks/uikit/ui_touch.rs
+index 1461475..cf1fc2d 100644
+--- a/src/frameworks/uikit/ui_touch.rs
++++ b/src/frameworks/uikit/ui_touch.rs
+@@ -9,10 +9,69 @@ use super::ui_event;
+ use crate::frameworks::core_graphics::{CGPoint, CGRect};
+ use crate::frameworks::foundation::{NSInteger, NSTimeInterval, NSUInteger};
+ use crate::mem::MutVoidPtr;
++use crate::frameworks::core_graphics::CGFloat;
++use crate::frameworks::foundation::ns_string::to_rust_string;
+ use crate::objc::{
+-    autorelease, id, msg, msg_class, nil, objc_classes, release, retain, ClassExports, HostObject,
+-    NSZonePtr,
++    autorelease, id, msg, msg_class, nil, objc_classes, release, retain, Class, ClassExports,
++    HostObject, NSZonePtr,
+ };
++
++// --- Temporary diagnostics (touchHLE-zzz-debug.patch) ---
++
++/// Log the whole view hierarchy: class, frame, visibility and label texts.
++fn debug_dump_view_tree(env: &mut Environment) {
++    log!("===== VIEW TREE =====");
++    let windows = env.framework_state.uikit.ui_view.ui_window.windows.clone();
++    for window in windows {
++        debug_dump_view(env, window, 0);
++    }
++    log!("===== END VIEW TREE =====");
++}
++fn debug_dump_view(env: &mut Environment, view: id, depth: usize) {
++    let class: Class = msg![env; view class];
++    let name = env.objc.get_class_name(class).to_string();
++    let frame: CGRect = msg![env; view frame];
++    let (fx, fy, fw, fh) = (frame.origin.x, frame.origin.y, frame.size.width, frame.size.height);
++    let hidden: bool = msg![env; view isHidden];
++    let alpha: CGFloat = msg![env; view alpha];
++    let layer: id = msg![env; view layer];
++    let layer_class: Class = msg![env; layer class];
++    let layer_name = env.objc.get_class_name(layer_class).to_string();
++    let opaque: bool = msg![env; layer isOpaque];
++    let label_class: Class = msg_class![env; UILabel class];
++    let is_label: bool = msg![env; view isKindOfClass:label_class];
++    let text = if is_label {
++        let text: id = msg![env; view text];
++        if text != nil {
++            format!(" text={:?}", to_rust_string(env, text).replace('\0', ""))
++        } else {
++            String::new()
++        }
++    } else {
++        String::new()
++    };
++    log!(
++        "{}{} {:?} frame=({:.0},{:.0} {:.0}x{:.0}) hidden={} alpha={:.2} layer={} opaque={}{}",
++        "  ".repeat(depth),
++        name,
++        view,
++        fx,
++        fy,
++        fw,
++        fh,
++        hidden,
++        alpha,
++        layer_name,
++        opaque,
++        text
++    );
++    let subviews: id = msg![env; view subviews];
++    let count: NSUInteger = msg![env; subviews count];
++    for i in 0..count {
++        let subview: id = msg![env; subviews objectAtIndex:i];
++        debug_dump_view(env, subview, depth + 1);
++    }
++}
+ use crate::window::{Coords, Event, FingerId};
+ use crate::Environment;
+ use std::collections::hash_map::{Entry, HashMap};
+@@ -237,6 +296,12 @@ fn handle_touches_down(env: &mut Environment, map: HashMap<FingerId, Coords>) {
+         };
+ 
+         let view: id = msg![env; window hitTest:location_in_window withEvent:event];
++        debug_dump_view_tree(env);
++        if view != nil {
++            let class: Class = msg![env; view class];
++            let name = env.objc.get_class_name(class).to_string();
++            log!("DEBUG touch at {:?} hit {} {:?}", location_in_window, name, view);
++        }
+         if view == nil {
+             log!(
+                 "Couldn't find a view for touch at {:?} in window {:?}, discarding",
+diff --git a/src/gles/gles1_on_gl2.rs b/src/gles/gles1_on_gl2.rs
+index 41ccda2..4da80ba 100644
+--- a/src/gles/gles1_on_gl2.rs
++++ b/src/gles/gles1_on_gl2.rs
+@@ -396,6 +396,14 @@ pub struct GLES1OnGL2State {
+     crop_rects: std::collections::HashMap<GLuint, [GLfloat; 4]>,
+ }
+ 
++/// Temporary diagnostics (touchHLE-zzz-debug.patch): draw calls since the
++/// last presented frame.
++pub static DEBUG_DRAW_CALLS: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
++pub static DEBUG_DRAW_TEX_CALLS: std::sync::atomic::AtomicU32 =
++    std::sync::atomic::AtomicU32::new(0);
++pub static DEBUG_SKINNED_DRAWS: std::sync::atomic::AtomicU32 =
++    std::sync::atomic::AtomicU32::new(0);
++
+ // OES_matrix_palette constants (not in the GL 2.1 bindings)
+ const MATRIX_PALETTE_OES: GLenum = 0x8840;
+ const MATRIX_INDEX_ARRAY_OES: GLenum = 0x8844;
+@@ -1730,6 +1738,10 @@ impl GLES for GLES1OnGL2<'_> {
+ 
+         let fixed_point_arrays_state_backup = self.translate_fixed_point_arrays(first, count);
+         let skinning_backup = self.apply_matrix_palette(first, count);
++        DEBUG_DRAW_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++        if skinning_backup.is_some() {
++            DEBUG_SKINNED_DRAWS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++        }
+ 
+         gl21::DrawArrays(mode, first, count);
+ 
+@@ -1825,6 +1837,10 @@ impl GLES for GLES1OnGL2<'_> {
+             None
+         };
+ 
++        DEBUG_DRAW_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++        if let Some((_, Some(_))) = &fixed_point_arrays_state_backup {
++            DEBUG_SKINNED_DRAWS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
++        }
+         gl21::DrawElements(mode, count, type_, indices);
+ 
+         if let Some((fixed_point_arrays_state_backup, skinning_backup)) = fixed_point_arrays_state_backup {
+@@ -2524,6 +2540,7 @@ impl GLES for GLES1OnGL2<'_> {
+         width: GLfloat,
+         height: GLfloat,
+     ) {
++        DEBUG_DRAW_TEX_CALLS.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+         if width <= 0.0 || height <= 0.0 {
+             return;
+         }
