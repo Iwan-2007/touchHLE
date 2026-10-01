@@ -1,0 +1,77 @@
+diff --git a/src/frameworks/uikit/ui_view/ui_control/ui_segmented_control.rs b/src/frameworks/uikit/ui_view/ui_control/ui_segmented_control.rs
+index 01e1550..09c6c34 100644
+--- a/src/frameworks/uikit/ui_view/ui_control/ui_segmented_control.rs
++++ b/src/frameworks/uikit/ui_view/ui_control/ui_segmented_control.rs
+@@ -5,8 +5,21 @@
+  */
+ //! `UISegmentedControl`.
+ 
+-use crate::frameworks::core_graphics::CGRect;
++use crate::frameworks::core_graphics::{CGPoint, CGRect, CGSize};
++use crate::frameworks::foundation::{NSInteger, NSUInteger};
++use crate::mem::GuestUSize;
+ use crate::objc::{id, msg_super, objc_classes, ClassExports};
++use std::cell::RefCell;
++use std::collections::HashMap;
++
++#[allow(non_upper_case_globals)]
++const UISegmentedControlNoSegment: NSInteger = -1;
++
++thread_local! {
++    /// `selectedSegmentIndex` of each control, keyed by object address.
++    /// TODO: move this into a proper host object once the control is drawn.
++    static SELECTED_SEGMENT: RefCell<HashMap<GuestUSize, NSInteger>> = RefCell::new(HashMap::new());
++}
+ 
+ pub const CLASSES: ClassExports = objc_classes! {
+ 
+@@ -25,7 +38,48 @@ pub const CLASSES: ClassExports = objc_classes! {
+     msg_super![env; this initWithCoder:coder]
+ }
+ 
+-// TODO: all of it
++- (id)initWithItems:(id)items { // NSArray*
++    log!("[(UISegmentedControl*){:?} initWithItems:{:?}] TODO: Implement UISegmentedControl. The control won't be rendered.", this, items);
++    let frame = CGRect {
++        origin: CGPoint { x: 0.0, y: 0.0 },
++        size: CGSize { width: 0.0, height: 0.0 },
++    };
++    let this: id = msg_super![env; this initWithFrame:frame];
++    SELECTED_SEGMENT.with(|m| {
++        m.borrow_mut().insert(this.to_bits(), UISegmentedControlNoSegment);
++    });
++    this
++}
++
++- (())dealloc {
++    SELECTED_SEGMENT.with(|m| {
++        m.borrow_mut().remove(&this.to_bits());
++    });
++    msg_super![env; this dealloc]
++}
++
++- (NSInteger)selectedSegmentIndex {
++    SELECTED_SEGMENT.with(|m| {
++        m.borrow().get(&this.to_bits()).copied().unwrap_or(UISegmentedControlNoSegment)
++    })
++}
++- (())setSelectedSegmentIndex:(NSInteger)index {
++    SELECTED_SEGMENT.with(|m| {
++        m.borrow_mut().insert(this.to_bits(), index);
++    });
++}
++
++// Appearance only: ignored since the control isn't rendered yet.
++- (())setSegmentedControlStyle:(NSInteger)_style {
++}
++- (())setTintColor:(id)_color { // UIColor*
++}
++- (())setTitle:(id)_title forSegmentAtIndex:(NSUInteger)_index { // NSString*
++}
++- (())setImage:(id)_image forSegmentAtIndex:(NSUInteger)_index { // UIImage*
++}
++
++// TODO: the rest of it
+ 
+ @end
+ 
