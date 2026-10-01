@@ -1,0 +1,57 @@
+diff --git a/src/gles/gles1_on_gl2.rs b/src/gles/gles1_on_gl2.rs
+index 8f99107..11d1d43 100644
+--- a/src/gles/gles1_on_gl2.rs
++++ b/src/gles/gles1_on_gl2.rs
+@@ -777,11 +777,47 @@ impl GLES for GLES1OnGL2<'_> {
+         }
+     }
+     unsafe fn GetIntegerv(&mut self, pname: GLenum, params: *mut GLint) {
+-        let (type_, _count) = GET_PARAMS.get_type_info(pname);
+-        // TODO: type conversion
+-        let allowed_float = type_ == ParamType::Float && pname == gl21::POINT_SIZE_MAX;
+-        assert!(type_ == ParamType::Int || allowed_float);
+-        gl21::GetIntegerv(pname, params);
++        // OpenGL ES-only queries that desktop OpenGL 2.1 doesn't know about.
++        // Values match the iPhone's PowerVR MBX GPU.
++        const IMPLEMENTATION_COLOR_READ_TYPE_OES: GLenum = 0x8B9A;
++        const IMPLEMENTATION_COLOR_READ_FORMAT_OES: GLenum = 0x8B9B;
++        const MAX_PALETTE_MATRICES_OES: GLenum = 0x8842;
++        const MAX_VERTEX_UNITS_OES: GLenum = 0x86A4;
++        let es_only = match pname {
++            IMPLEMENTATION_COLOR_READ_TYPE_OES => Some(gl21::UNSIGNED_BYTE as GLint),
++            IMPLEMENTATION_COLOR_READ_FORMAT_OES => Some(gl21::RGBA as GLint),
++            MAX_PALETTE_MATRICES_OES => Some(9),
++            MAX_VERTEX_UNITS_OES => Some(3),
++            _ => None,
++        };
++        if let Some(value) = es_only {
++            *params = value;
++            return;
++        }
++
++        let (type_, count) = GET_PARAMS.get_type_info(pname);
++        let count = count as usize;
++        assert!(count <= 16);
++        match type_ {
++            ParamType::Int => gl21::GetIntegerv(pname, params),
++            // OpenGL ES allows querying any state with glGetIntegerv: booleans
++            // become 0/1 and floats are rounded to the nearest integer.
++            ParamType::Boolean => {
++                let mut tmp = [gl21::FALSE; 16];
++                gl21::GetBooleanv(pname, tmp.as_mut_ptr());
++                for (i, &b) in tmp.iter().enumerate().take(count) {
++                    *params.add(i) = GLint::from(b != gl21::FALSE);
++                }
++            }
++            ParamType::Float | ParamType::FloatSpecial => {
++                let mut tmp = [0.0 as GLfloat; 16];
++                gl21::GetFloatv(pname, tmp.as_mut_ptr());
++                for (i, &f) in tmp.iter().enumerate().take(count) {
++                    *params.add(i) = f.round() as GLint;
++                }
++            }
++            _ => unimplemented!("TODO: type conversion for {:?}", type_),
++        }
+     }
+     unsafe fn GetTexEnviv(&mut self, target: GLenum, pname: GLenum, params: *mut GLint) {
+         let (type_, _count) = TEX_ENV_PARAMS.get_type_info(pname);
