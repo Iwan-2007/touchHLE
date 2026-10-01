@@ -1,0 +1,212 @@
+diff --git a/src/gles/gles1_on_gl2.rs b/src/gles/gles1_on_gl2.rs
+index 41ccda26..4dabbfbd 100644
+--- a/src/gles/gles1_on_gl2.rs
++++ b/src/gles/gles1_on_gl2.rs
+@@ -394,6 +394,12 @@ pub struct GLES1OnGL2State {
+     palette: PaletteState,
+     /// GL_TEXTURE_CROP_RECT_OES of each texture (for glDrawTexOES), in texels.
+     crop_rects: std::collections::HashMap<GLuint, [GLfloat; 4]>,
++    /// CPU copy of the contents of each buffer object created in this
++    /// context. Fixed-point translation and software skinning read vertex
++    /// data on the CPU before every draw call; reading it back from the GPU
++    /// with glMapBuffer stalls the pipeline each time, which made the game
++    /// run at under 1 FPS.
++    buffer_shadows: std::collections::HashMap<GLuint, Vec<u8>>,
+ }
+ 
+ // OES_matrix_palette constants (not in the GL 2.1 bindings)
+@@ -499,6 +505,7 @@ impl GLESContext for GLES1OnGL2Context {
+                 fixed_point_translation_buffers: [Vec::new(), Vec::new(), Vec::new(), Vec::new()],
+                 palette: PaletteState::default(),
+                 crop_rects: std::collections::HashMap::new(),
++                buffer_shadows: std::collections::HashMap::new(),
+             },
+             is_loaded: false,
+         })
+@@ -551,6 +558,23 @@ pub struct GLES1OnGL2<'a> {
+ }
+ 
+ impl GLES1OnGL2<'_> {
++    /// Name of the buffer currently bound to `target`.
++    unsafe fn bound_buffer(target: GLenum) -> GLuint {
++        let pname = if target == gl21::ELEMENT_ARRAY_BUFFER {
++            gl21::ELEMENT_ARRAY_BUFFER_BINDING
++        } else {
++            gl21::ARRAY_BUFFER_BINDING
++        };
++        let mut buffer: GLint = 0;
++        gl21::GetIntegerv(pname, &mut buffer);
++        buffer as GLuint
++    }
++
++    /// Pointer to the CPU copy of `buffer`'s contents, if there is one.
++    fn buffer_shadow(&self, buffer: GLuint) -> Option<*const u8> {
++        self.state.buffer_shadows.get(&buffer).map(|data| data.as_ptr())
++    }
++
+     /// If any arrays with fixed-point data are in use at the time of a draw
+     /// call, this function will convert the data to floating-point and
+     /// replace the pointers. [Self::restore_fixed_point_arrays] can be called
+@@ -632,11 +656,20 @@ impl GLES1OnGL2<'_> {
+                 buffer_binding: buffer_binding.try_into().unwrap(),
+             });
+ 
++            let buffer_name: GLuint = buffer_binding.try_into().unwrap();
++            let shadow = self.buffer_shadow(buffer_name);
++            let mapped = buffer_binding != 0 && shadow.is_none();
+             let pointer = if buffer_binding != 0 {
+-                let mapped_buffer = gl21::MapBuffer(gl21::ARRAY_BUFFER, gl21::READ_ONLY);
+-                assert!(!mapped_buffer.is_null());
++                let base = match shadow {
++                    Some(base) => base.cast::<GLvoid>(),
++                    None => {
++                        let mapped_buffer = gl21::MapBuffer(gl21::ARRAY_BUFFER, gl21::READ_ONLY);
++                        assert!(!mapped_buffer.is_null());
++                        mapped_buffer.cast_const()
++                    }
++                };
+                 // in this case the old_pointer is actually an offest!
+-                mapped_buffer.add(old_pointer as usize)
++                base.add(old_pointer as usize)
+             } else {
+                 old_pointer
+             };
+@@ -673,8 +706,10 @@ impl GLES1OnGL2<'_> {
+                 }
+             }
+ 
+-            if buffer_binding != 0 {
++            if mapped {
+                 gl21::UnmapBuffer(gl21::ARRAY_BUFFER);
++            }
++            if buffer_binding != 0 {
+                 gl21::BindBuffer(gl21::ARRAY_BUFFER, 0);
+             }
+ 
+@@ -774,13 +809,18 @@ impl GLES1OnGL2<'_> {
+         let indices = self.state.palette.matrix_index_array.unwrap();
+         let weights = self.state.palette.weight_array.unwrap();
+ 
+-        // Map each buffer object involved once (arrays are often interleaved
+-        // in the same buffer, which can't be mapped twice).
++        // Use the CPU copy of each buffer object when there is one; otherwise
++        // map it, once (arrays are often interleaved in the same buffer,
++        // which can't be mapped twice).
++        let shadows = &self.state.buffer_shadows;
+         let mut mapped: Vec<(GLuint, *const u8)> = Vec::new();
+         let mut resolve = |buffer: GLuint, pointer: usize| -> *const u8 {
+             if buffer == 0 {
+                 return pointer as *const u8;
+             }
++            if let Some(data) = shadows.get(&buffer) {
++                return data.as_ptr().add(pointer);
++            }
+             let base = match mapped.iter().find(|&&(b, _)| b == buffer) {
+                 Some(&(_, base)) => base,
+                 None => {
+@@ -1586,6 +1626,9 @@ impl GLES for GLES1OnGL2<'_> {
+         gl21::GenBuffers(n, buffers)
+     }
+     unsafe fn DeleteBuffers(&mut self, n: GLsizei, buffers: *const GLuint) {
++        for i in 0..n.max(0) as usize {
++            self.state.buffer_shadows.remove(&buffers.add(i).read_unaligned());
++        }
+         gl21::DeleteBuffers(n, buffers)
+     }
+     unsafe fn BindBuffer(&mut self, target: GLenum, buffer: GLuint) {
+@@ -1600,7 +1643,17 @@ impl GLES for GLES1OnGL2<'_> {
+         usage: GLenum,
+     ) {
+         assert!(target == gl21::ARRAY_BUFFER || target == gl21::ELEMENT_ARRAY_BUFFER);
+-        gl21::BufferData(target, size, data, usage)
++        gl21::BufferData(target, size, data, usage);
++        let buffer = Self::bound_buffer(target);
++        if buffer != 0 {
++            let size = size.max(0) as usize;
++            let contents = if data.is_null() {
++                vec![0u8; size]
++            } else {
++                std::slice::from_raw_parts(data.cast::<u8>(), size).to_vec()
++            };
++            self.state.buffer_shadows.insert(buffer, contents);
++        }
+     }
+ 
+     unsafe fn BufferSubData(
+@@ -1611,7 +1664,18 @@ impl GLES for GLES1OnGL2<'_> {
+         data: *const GLvoid,
+     ) {
+         assert!(target == gl21::ARRAY_BUFFER || target == gl21::ELEMENT_ARRAY_BUFFER);
+-        gl21::BufferSubData(target, offset, size, data)
++        gl21::BufferSubData(target, offset, size, data);
++        let buffer = Self::bound_buffer(target);
++        if let Some(shadow) = self.state.buffer_shadows.get_mut(&buffer) {
++            let (offset, size) = (offset.max(0) as usize, size.max(0) as usize);
++            if !data.is_null() && offset + size <= shadow.len() {
++                shadow[offset..offset + size]
++                    .copy_from_slice(std::slice::from_raw_parts(data.cast::<u8>(), size));
++            } else {
++                // Shouldn't happen; fall back to reading from the GPU.
++                self.state.buffer_shadows.remove(&buffer);
++            }
++        }
+     }
+ 
+     // Non-pointers
+@@ -1772,11 +1836,20 @@ impl GLES for GLES1OnGL2<'_> {
+                 gl21::ELEMENT_ARRAY_BUFFER_BINDING,
+                 &mut index_buffer_binding,
+             );
++            let index_shadow = self.buffer_shadow(index_buffer_binding as GLuint);
++            let index_mapped = index_buffer_binding != 0 && index_shadow.is_none();
+             let indices = if index_buffer_binding != 0 {
+-                let mapped_buffer = gl21::MapBuffer(gl21::ELEMENT_ARRAY_BUFFER, gl21::READ_ONLY);
+-                assert!(!mapped_buffer.is_null());
++                let base = match index_shadow {
++                    Some(base) => base.cast::<GLvoid>(),
++                    None => {
++                        let mapped_buffer =
++                            gl21::MapBuffer(gl21::ELEMENT_ARRAY_BUFFER, gl21::READ_ONLY);
++                        assert!(!mapped_buffer.is_null());
++                        mapped_buffer.cast_const()
++                    }
++                };
+                 // in this case the indices is actually an offest!
+-                mapped_buffer.add(indices as usize)
++                base.add(indices as usize)
+             } else {
+                 indices
+             };
+@@ -1814,7 +1887,7 @@ impl GLES for GLES1OnGL2<'_> {
+                 )
+             };
+ 
+-            if index_buffer_binding != 0 {
++            if index_mapped {
+                 gl21::UnmapBuffer(gl21::ELEMENT_ARRAY_BUFFER);
+             }
+ 
+@@ -2746,6 +2819,23 @@ impl GLES for GLES1OnGL2<'_> {
+         gl21::MapBuffer(target, access)
+     }
+     unsafe fn UnmapBufferOES(&mut self, target: GLenum) -> GLboolean {
++        // The app may have written to the buffer while it was mapped: update
++        // the CPU copy before unmapping.
++        let buffer = Self::bound_buffer(target);
++        if self.state.buffer_shadows.contains_key(&buffer) {
++            let mut size: GLint = 0;
++            gl21::GetBufferParameteriv(target, gl21::BUFFER_SIZE, &mut size);
++            let mut pointer: *mut GLvoid = std::ptr::null_mut();
++            #[allow(clippy::unnecessary_mut_passed)]
++            gl21::GetBufferPointerv(target, gl21::BUFFER_MAP_POINTER, &mut pointer);
++            if pointer.is_null() {
++                self.state.buffer_shadows.remove(&buffer);
++            } else {
++                let contents =
++                    std::slice::from_raw_parts(pointer.cast::<u8>(), size.max(0) as usize).to_vec();
++                self.state.buffer_shadows.insert(buffer, contents);
++            }
++        }
+         gl21::UnmapBuffer(target)
+     }
+ }
