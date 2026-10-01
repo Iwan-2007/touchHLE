@@ -1,0 +1,316 @@
+diff --git a/src/frameworks/opengles/gles_guest.rs b/src/frameworks/opengles/gles_guest.rs
+index fe3683a..9771566 100644
+--- a/src/frameworks/opengles/gles_guest.rs
++++ b/src/frameworks/opengles/gles_guest.rs
+@@ -715,6 +715,32 @@ fn glVertexPointer(
+     })
+ }
+ 
++// OES_draw_texture
++fn glDrawTexfOES(
++    env: &mut Environment,
++    x: GLfloat,
++    y: GLfloat,
++    z: GLfloat,
++    width: GLfloat,
++    height: GLfloat,
++) {
++    with_ctx_and_mem(env, |gles, _mem| unsafe {
++        gles.DrawTexfOES(x, y, z, width, height)
++    })
++}
++fn glDrawTexiOES(
++    env: &mut Environment,
++    x: GLint,
++    y: GLint,
++    z: GLint,
++    width: GLint,
++    height: GLint,
++) {
++    with_ctx_and_mem(env, |gles, _mem| unsafe {
++        gles.DrawTexfOES(x as _, y as _, z as _, width as _, height as _)
++    })
++}
++
+ // OES_matrix_palette
+ fn glCurrentPaletteMatrixOES(env: &mut Environment, matrixpaletteindex: GLuint) {
+     with_ctx_and_mem(env, |gles, _mem| unsafe {
+@@ -994,8 +1020,7 @@ fn glBindTexture(env: &mut Environment, target: GLenum, texture: GLuint) {
+     })
+ }
+ fn glTexParameteri(env: &mut Environment, target: GLenum, pname: GLenum, param: GLint) {
+-    // So long as we haven't implemented glDrawTexOES yet, we can just ignore
+-    // this parameter, because it doesn't do anything for normal texture use.
++    // The crop rectangle has 4 values, so it can't be set this way.
+     if pname == gles11::TEXTURE_CROP_RECT_OES {
+         return;
+     }
+@@ -1022,12 +1047,10 @@ fn glTexParameterx(env: &mut Environment, target: GLenum, pname: GLenum, param:
+     })
+ }
+ fn glTexParameteriv(env: &mut Environment, target: GLenum, pname: GLenum, params: ConstPtr<GLint>) {
+-    // See above.
+-    if pname == gles11::TEXTURE_CROP_RECT_OES {
+-        return;
+-    }
++    // The crop rectangle (used by glDrawTexOES) is the only vector parameter.
++    let count = if pname == gles11::TEXTURE_CROP_RECT_OES { 4 } else { 1 };
+     with_ctx_and_mem(env, |gles, mem| unsafe {
+-        let params = mem.ptr_at(params, 1 /* upper bound */);
++        let params = mem.ptr_at(params, count /* upper bound */);
+         gles.TexParameteriv(target, pname, params)
+     })
+ }
+@@ -1037,12 +1060,10 @@ fn glTexParameterfv(
+     pname: GLenum,
+     params: ConstPtr<GLfloat>,
+ ) {
+-    // See above.
+-    if pname == gles11::TEXTURE_CROP_RECT_OES {
+-        return;
+-    }
++    // See glTexParameteriv.
++    let count = if pname == gles11::TEXTURE_CROP_RECT_OES { 4 } else { 1 };
+     with_ctx_and_mem(env, |gles, mem| unsafe {
+-        let params = mem.ptr_at(params, 1 /* upper bound */);
++        let params = mem.ptr_at(params, count /* upper bound */);
+         gles.TexParameterfv(target, pname, params)
+     })
+ }
+@@ -1052,12 +1073,10 @@ fn glTexParameterxv(
+     pname: GLenum,
+     params: ConstPtr<GLfixed>,
+ ) {
+-    // See above.
+-    if pname == gles11::TEXTURE_CROP_RECT_OES {
+-        return;
+-    }
++    // See glTexParameteriv.
++    let count = if pname == gles11::TEXTURE_CROP_RECT_OES { 4 } else { 1 };
+     with_ctx_and_mem(env, |gles, mem| unsafe {
+-        let params = mem.ptr_at(params, 1 /* upper bound */);
++        let params = mem.ptr_at(params, count /* upper bound */);
+         gles.TexParameterxv(target, pname, params)
+     })
+ }
+@@ -1597,6 +1616,8 @@ pub const FUNCTIONS: FunctionExports = &[
+     export_c_func!(glNormalPointer(_, _, _)),
+     export_c_func!(glTexCoordPointer(_, _, _, _)),
+     export_c_func!(glVertexPointer(_, _, _, _)),
++    export_c_func!(glDrawTexfOES(_, _, _, _, _)),
++    export_c_func!(glDrawTexiOES(_, _, _, _, _)),
+     export_c_func!(glCurrentPaletteMatrixOES(_)),
+     export_c_func!(glLoadPaletteFromModelViewMatrixOES()),
+     export_c_func!(glMatrixIndexPointerOES(_, _, _, _)),
+diff --git a/src/gles/gles1_native.rs b/src/gles/gles1_native.rs
+index 0c8b288..1b9f1b8 100644
+--- a/src/gles/gles1_native.rs
++++ b/src/gles/gles1_native.rs
+@@ -751,6 +751,18 @@ impl GLES for GLES1Native<'_> {
+         gles11::Translatex(x, y, z)
+     }
+ 
++    // OES_draw_texture
++    unsafe fn DrawTexfOES(
++        &mut self,
++        x: GLfloat,
++        y: GLfloat,
++        z: GLfloat,
++        width: GLfloat,
++        height: GLfloat,
++    ) {
++        gles11::DrawTexfOES(x, y, z, width, height)
++    }
++
+     // OES_matrix_palette
+     unsafe fn CurrentPaletteMatrixOES(&mut self, matrixpaletteindex: GLuint) {
+         gles11::CurrentPaletteMatrixOES(matrixpaletteindex)
+diff --git a/src/gles/gles1_on_gl2.rs b/src/gles/gles1_on_gl2.rs
+index 862ad02..41ccda2 100644
+--- a/src/gles/gles1_on_gl2.rs
++++ b/src/gles/gles1_on_gl2.rs
+@@ -392,6 +392,8 @@ pub struct GLES1OnGL2State {
+     fixed_point_texture_units: HashSet<GLenum>,
+     fixed_point_translation_buffers: [Vec<GLfloat>; ARRAYS.len()],
+     palette: PaletteState,
++    /// GL_TEXTURE_CROP_RECT_OES of each texture (for glDrawTexOES), in texels.
++    crop_rects: std::collections::HashMap<GLuint, [GLfloat; 4]>,
+ }
+ 
+ // OES_matrix_palette constants (not in the GL 2.1 bindings)
+@@ -496,6 +498,7 @@ impl GLESContext for GLES1OnGL2Context {
+                 fixed_point_texture_units: HashSet::new(),
+                 fixed_point_translation_buffers: [Vec::new(), Vec::new(), Vec::new(), Vec::new()],
+                 palette: PaletteState::default(),
++                crop_rects: std::collections::HashMap::new(),
+             },
+             is_loaded: false,
+         })
+@@ -916,6 +919,13 @@ impl GLES1OnGL2<'_> {
+         gl21::BindBuffer(gl21::ARRAY_BUFFER, array_buffer_binding);
+     }
+ 
++    /// Store GL_TEXTURE_CROP_RECT_OES for the currently bound texture.
++    unsafe fn set_crop_rect(&mut self, rect: [GLfloat; 4]) {
++        let mut texture: GLint = 0;
++        gl21::GetIntegerv(gl21::TEXTURE_BINDING_2D, &mut texture);
++        self.state.crop_rects.insert(texture as GLuint, rect);
++    }
++
+     unsafe fn restore_fixed_point_arrays(
+         &mut self,
+         from_backup: [Option<ArrayStateBackup>; ARRAYS.len()],
+@@ -1927,16 +1937,30 @@ impl GLES for GLES1OnGL2<'_> {
+     }
+     unsafe fn TexParameteriv(&mut self, target: GLenum, pname: GLenum, params: *const GLint) {
+         assert!(target == gl21::TEXTURE_2D);
++        if pname == gles11::TEXTURE_CROP_RECT_OES {
++            let p = std::slice::from_raw_parts(params, 4);
++            return self.set_crop_rect([p[0] as _, p[1] as _, p[2] as _, p[3] as _]);
++        }
+         TEX_PARAMS.assert_known_param(pname);
+         gl21::TexParameteriv(target, pname, params);
+     }
+     unsafe fn TexParameterfv(&mut self, target: GLenum, pname: GLenum, params: *const GLfloat) {
+         assert!(target == gl21::TEXTURE_2D);
++        if pname == gles11::TEXTURE_CROP_RECT_OES {
++            let p = std::slice::from_raw_parts(params, 4);
++            return self.set_crop_rect([p[0], p[1], p[2], p[3]]);
++        }
+         TEX_PARAMS.assert_known_param(pname);
+         gl21::TexParameterfv(target, pname, params);
+     }
+     unsafe fn TexParameterxv(&mut self, target: GLenum, pname: GLenum, params: *const GLfixed) {
+         assert!(target == gl21::TEXTURE_2D);
++        if pname == gles11::TEXTURE_CROP_RECT_OES {
++            // Unlike most parameters, the crop rectangle is plain integers
++            // even when set with the fixed-point function.
++            let p = std::slice::from_raw_parts(params, 4);
++            return self.set_crop_rect([p[0] as _, p[1] as _, p[2] as _, p[3] as _]);
++        }
+         TEX_PARAMS.setxv(
+             |params| gl21::TexParameterfv(target, pname, params),
+             |params| gl21::TexParameteriv(target, pname, params),
+@@ -2489,6 +2513,101 @@ impl GLES for GLES1OnGL2<'_> {
+         self.Translatef(fixed_to_float(x), fixed_to_float(y), fixed_to_float(z));
+     }
+ 
++    // OES_draw_texture: draw a screen-aligned textured rectangle, using the
++    // texture's crop rectangle. Emulated with an immediate-mode quad, which
++    // leaves the app's vertex arrays untouched.
++    unsafe fn DrawTexfOES(
++        &mut self,
++        x: GLfloat,
++        y: GLfloat,
++        z: GLfloat,
++        width: GLfloat,
++        height: GLfloat,
++    ) {
++        if width <= 0.0 || height <= 0.0 {
++            return;
++        }
++
++        let mut active_texture: GLint = 0;
++        gl21::GetIntegerv(gl21::ACTIVE_TEXTURE, &mut active_texture);
++        gl21::ActiveTexture(gl21::TEXTURE0);
++
++        let mut texture: GLint = 0;
++        gl21::GetIntegerv(gl21::TEXTURE_BINDING_2D, &mut texture);
++        let (mut tex_width, mut tex_height): (GLint, GLint) = (0, 0);
++        if texture != 0 {
++            gl21::GetTexLevelParameteriv(gl21::TEXTURE_2D, 0, gl21::TEXTURE_WIDTH, &mut tex_width);
++            gl21::GetTexLevelParameteriv(gl21::TEXTURE_2D, 0, gl21::TEXTURE_HEIGHT, &mut tex_height);
++        }
++        let (s0, t0, s1, t1) = if tex_width > 0 && tex_height > 0 {
++            let (tw, th) = (tex_width as GLfloat, tex_height as GLfloat);
++            let crop = self
++                .state
++                .crop_rects
++                .get(&(texture as GLuint))
++                .copied()
++                .unwrap_or([0.0, 0.0, tw, th]);
++            (
++                crop[0] / tw,
++                crop[1] / th,
++                (crop[0] + crop[2]) / tw,
++                (crop[1] + crop[3]) / th,
++            )
++        } else {
++            (0.0, 0.0, 1.0, 1.0)
++        };
++
++        // x and y are window co-ordinates; z is a depth in [0, 1].
++        let mut viewport: [GLint; 4] = [0; 4];
++        gl21::GetIntegerv(gl21::VIEWPORT, viewport.as_mut_ptr());
++        let z = 1.0 - 2.0 * z.clamp(0.0, 1.0); // eye-space z for the ortho below
++
++        let mut matrix_mode: GLint = 0;
++        gl21::GetIntegerv(gl21::MATRIX_MODE, &mut matrix_mode);
++        gl21::MatrixMode(gl21::PROJECTION);
++        gl21::PushMatrix();
++        gl21::LoadIdentity();
++        gl21::Ortho(
++            viewport[0] as f64,
++            (viewport[0] + viewport[2]) as f64,
++            viewport[1] as f64,
++            (viewport[1] + viewport[3]) as f64,
++            -1.0,
++            1.0,
++        );
++        gl21::MatrixMode(gl21::MODELVIEW);
++        gl21::PushMatrix();
++        gl21::LoadIdentity();
++        gl21::MatrixMode(gl21::TEXTURE);
++        gl21::PushMatrix();
++        gl21::LoadIdentity();
++
++        gl21::PushAttrib(gl21::ENABLE_BIT);
++        gl21::Disable(gl21::LIGHTING);
++        gl21::Disable(gl21::CULL_FACE);
++
++        gl21::Begin(gl21::TRIANGLE_FAN);
++        gl21::TexCoord2f(s0, t0);
++        gl21::Vertex3f(x, y, z);
++        gl21::TexCoord2f(s1, t0);
++        gl21::Vertex3f(x + width, y, z);
++        gl21::TexCoord2f(s1, t1);
++        gl21::Vertex3f(x + width, y + height, z);
++        gl21::TexCoord2f(s0, t1);
++        gl21::Vertex3f(x, y + height, z);
++        gl21::End();
++
++        gl21::PopAttrib();
++        gl21::MatrixMode(gl21::TEXTURE);
++        gl21::PopMatrix();
++        gl21::MatrixMode(gl21::MODELVIEW);
++        gl21::PopMatrix();
++        gl21::MatrixMode(gl21::PROJECTION);
++        gl21::PopMatrix();
++        gl21::MatrixMode(matrix_mode as GLenum);
++        gl21::ActiveTexture(active_texture as GLenum);
++    }
++
+     // OES_matrix_palette (emulated, see apply_matrix_palette)
+     unsafe fn CurrentPaletteMatrixOES(&mut self, matrixpaletteindex: GLuint) {
+         let index = matrixpaletteindex as usize;
+diff --git a/src/gles/gles_generic.rs b/src/gles/gles_generic.rs
+index 8965782..edc21af 100644
+--- a/src/gles/gles_generic.rs
++++ b/src/gles/gles_generic.rs
+@@ -391,6 +391,16 @@ pub trait GLES {
+     unsafe fn Translatef(&mut self, x: GLfloat, y: GLfloat, z: GLfloat);
+     unsafe fn Translatex(&mut self, x: GLfixed, y: GLfixed, z: GLfixed);
+ 
++    // OES_draw_texture
++    unsafe fn DrawTexfOES(
++        &mut self,
++        x: GLfloat,
++        y: GLfloat,
++        z: GLfloat,
++        width: GLfloat,
++        height: GLfloat,
++    );
++
+     // OES_matrix_palette
+     unsafe fn CurrentPaletteMatrixOES(&mut self, matrixpaletteindex: GLuint);
+     unsafe fn LoadPaletteFromModelViewMatrixOES(&mut self);
