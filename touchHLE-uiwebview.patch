@@ -1,0 +1,24 @@
+diff --git a/src/frameworks/uikit/ui_view/ui_web_view.rs b/src/frameworks/uikit/ui_view/ui_web_view.rs
+index 525dc8d..c37cf46 100644
+--- a/src/frameworks/uikit/ui_view/ui_web_view.rs
++++ b/src/frameworks/uikit/ui_view/ui_web_view.rs
+@@ -37,6 +37,19 @@ pub const CLASSES: ClassExports = objc_classes! {
+     };
+     log!("TODO: [(UIWebView*) {:?} loadRequest:{:?} ({})]", this, request, url_string);
+ }
++- (())loadHTMLString:(id)html // NSString*
++              baseURL:(id)base_url { // NSURL*
++    // No HTML rendering: the view just stays empty.
++    let len = if html != nil {
++        to_rust_string(env, html).len()
++    } else {
++        0
++    };
++    log!("TODO: [(UIWebView*) {:?} loadHTMLString:({} chars) baseURL:{:?}]", this, len, base_url);
++}
++- (())stopLoading {
++    // Nothing is ever loading.
++}
+ 
+ @end
+ 
