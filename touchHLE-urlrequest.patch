@@ -1,0 +1,16 @@
+diff --git a/src/frameworks/foundation/ns_url_request.rs b/src/frameworks/foundation/ns_url_request.rs
+index 6ca37d2..fe2fbcd 100644
+--- a/src/frameworks/foundation/ns_url_request.rs
++++ b/src/frameworks/foundation/ns_url_request.rs
+@@ -165,6 +165,11 @@ pub const CLASSES: ClassExports = objc_classes! {
+     todo_objc_setter!(this, cache_policy);
+ }
+ 
++- (())setTimeoutInterval:(NSTimeInterval)timeout_interval {
++    // Stored only: touchHLE doesn't do real networking.
++    env.objc.borrow_mut::<NSURLRequestHostObject>(this).timeout_interval = timeout_interval;
++}
++
+ - (())setHTTPMethod:(id)http_method { // NSString *
+     let http_method_copy = msg![env; http_method copy];
+ 
