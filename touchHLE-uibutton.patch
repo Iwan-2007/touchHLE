@@ -1,0 +1,97 @@
+diff --git a/src/frameworks/uikit/ui_view/ui_control/ui_button.rs b/src/frameworks/uikit/ui_view/ui_control/ui_button.rs
+index dec8a968..b1f3714e 100644
+--- a/src/frameworks/uikit/ui_view/ui_control/ui_button.rs
++++ b/src/frameworks/uikit/ui_view/ui_control/ui_button.rs
+@@ -6,7 +6,7 @@
+ //! `UIButton`.
+ 
+ use super::{UIControlState, UIControlStateNormal};
+-use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect};
++use crate::frameworks::core_graphics::{CGFloat, CGPoint, CGRect, CGSize};
+ use crate::frameworks::foundation::ns_string::{from_rust_string, get_static_str, to_rust_string};
+ use crate::frameworks::foundation::NSInteger;
+ use crate::frameworks::uikit::ui_font::UITextAlignmentCenter;
+@@ -75,6 +75,50 @@ impl Default for UIButtonHostObject {
+     }
+ }
+ 
++/// Places the subviews. touchHLE has no real layout pass, so this is also
++/// called whenever the image or the frame changes.
++fn layout(env: &mut Environment, this: id) {
++    let &UIButtonHostObject {
++        title_label,
++        image_view,
++        background_image_view,
++        ..
++    } = env.objc.borrow(this);
++    let bounds: CGRect = msg![env; this bounds];
++
++    () = msg![env; background_image_view setFrame:bounds];
++    () = msg![env; title_label setFrame:bounds];
++
++    // The image keeps its natural size, centered, and is scaled down
++    // (keeping its aspect ratio) if it doesn't fit in the button.
++    let image: id = msg![env; image_view image];
++    let image_frame = if image == nil {
++        CGRect {
++            origin: CGPoint { x: 0.0, y: 0.0 },
++            size: CGSize { width: 0.0, height: 0.0 },
++        }
++    } else {
++        let size: CGSize = msg![env; image size];
++        let (bw, bh) = (bounds.size.width, bounds.size.height);
++        let mut scale: CGFloat = 1.0;
++        if size.width > bw && size.width > 0.0 {
++            scale = scale.min(bw / size.width);
++        }
++        if size.height > bh && size.height > 0.0 {
++            scale = scale.min(bh / size.height);
++        }
++        let (w, h) = (size.width * scale, size.height * scale);
++        CGRect {
++            origin: CGPoint {
++                x: bounds.origin.x + (bw - w) / 2.0,
++                y: bounds.origin.y + (bh - h) / 2.0,
++            },
++            size: CGSize { width: w, height: h },
++        }
++    };
++    () = msg![env; image_view setFrame:image_frame];
++}
++
+ fn update(env: &mut Environment, this: id) {
+     let title_label: id = msg![env; this titleLabel];
+     let title: id = msg![env; this currentTitle];
+@@ -89,6 +133,8 @@ fn update(env: &mut Environment, this: id) {
+     let background_image_view: id = msg![env; this backgroundImageView];
+     let background_image: id = msg![env; this currentBackgroundImage];
+     () = msg![env; background_image_view setImage:background_image];
++
++    layout(env, this);
+ }
+ 
+ fn init_common(env: &mut Environment, this: id) -> id {
+@@ -250,14 +296,16 @@ pub const CLASSES: ClassExports = objc_classes! {
+ }
+ 
+ - (())layoutSubviews {
+-    let label = env.objc.borrow_mut::<UIButtonHostObject>(this).title_label;
+-    let background_image_view = env.objc.borrow_mut::<UIButtonHostObject>(this).background_image_view;
+-    let bounds: CGRect = msg![env; this bounds];
+-
+-    () = msg![env; background_image_view setFrame:bounds];
+-    () = msg![env; label setFrame:bounds];
+-    // TODO: layout for image
++    layout(env, this);
++}
+ 
++- (())setFrame:(CGRect)frame {
++    () = msg_super![env; this setFrame:frame];
++    layout(env, this);
++}
++- (())setBounds:(CGRect)bounds {
++    () = msg_super![env; this setBounds:bounds];
++    layout(env, this);
+ }
+ 
+ - (UIButtonType)buttonType {
