@@ -1,0 +1,60 @@
+diff --git a/src/frameworks/foundation/ns_string.rs b/src/frameworks/foundation/ns_string.rs
+index 1955f2b..1b2f91c 100644
+--- a/src/frameworks/foundation/ns_string.rs
++++ b/src/frameworks/foundation/ns_string.rs
+@@ -1640,6 +1640,55 @@ pub const CLASSES: ClassExports = objc_classes! {
+     *env.objc.borrow_mut(this) = host_object;
+ }
+ 
++- (NSUInteger)replaceOccurrencesOfString:(id)target // NSString*
++                              withString:(id)replacement // NSString*
++                                 options:(NSStringCompareOptions)options
++                                   range:(NSRange)range {
++    // Count the matches first (the return value), then reuse the immutable
++    // implementation for the actual replacement.
++    let fold = |c: u16| {
++        if options & NSCaseInsensitiveSearch != 0 && (0x41..=0x5A).contains(&c) {
++            c + 0x20
++        } else {
++            c
++        }
++    };
++    let mut hay = Vec::new();
++    for_each_code_unit(env, this, |_, c| hay.push(fold(c)));
++    let mut needle = Vec::new();
++    for_each_code_unit(env, target, |_, c| needle.push(fold(c)));
++    let start = range.location as usize;
++    let end = (start + range.length as usize).min(hay.len());
++    let mut count: NSUInteger = 0;
++    if !needle.is_empty() {
++        let mut i = start;
++        while i + needle.len() <= end {
++            if hay[i..i + needle.len()] == needle[..] {
++                count += 1;
++                i += needle.len();
++            } else {
++                i += 1;
++            }
++        }
++    }
++    if count > 0 {
++        let new: id = msg![env; this stringByReplacingOccurrencesOfString:target
++                                                               withString:replacement
++                                                                  options:options
++                                                                    range:range];
++        () = msg![env; this setString:new];
++    }
++    count
++}
++
++- (())insertString:(id)string atIndex:(NSUInteger)index { // NSString*
++    let left: id = msg![env; this substringToIndex:index];
++    let right: id = msg![env; this substringFromIndex:index];
++    let left_and_new: id = msg![env; left stringByAppendingString:string];
++    let new: id = msg![env; left_and_new stringByAppendingString:right];
++    () = msg![env; this setString:new];
++}
++
+ - (id)substringWithRange:(NSRange)range {
+     let host_object = env.objc.borrow_mut::<StringHostObject>(this);
+     let (orig_string, did_convert) = host_object.convert_to_utf16_inplace();
