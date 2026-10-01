@@ -1,0 +1,69 @@
+diff --git a/src/libc/wchar.rs b/src/libc/wchar.rs
+index 40317d0..82fb89a 100644
+--- a/src/libc/wchar.rs
++++ b/src/libc/wchar.rs
+@@ -6,7 +6,8 @@
+ //! `wchar.h`
+ 
+ use crate::dyld::{export_c_func, FunctionExports};
+-use crate::mem::{ConstPtr, GuestUSize, MutPtr};
++use crate::libc::errno::set_errno;
++use crate::mem::{ConstPtr, GuestUSize, MutPtr, MutVoidPtr, Ptr};
+ use crate::Environment;
+ 
+ use super::generic_char::GenericChar;
+@@ -42,6 +43,46 @@ fn wctob(_env: &mut Environment, c: wint_t) -> i32 {
+     }
+ }
+ 
++/// Wide string to multibyte string, restartable version. Like `wcstombs`,
++/// this assumes the "C" locale: every wide character must fit in one byte.
++fn wcsrtombs(
++    env: &mut Environment,
++    dst: MutPtr<u8>,
++    src: MutPtr<ConstPtr<wchar_t>>,
++    len: GuestUSize,
++    _ps: MutVoidPtr,
++) -> GuestUSize {
++    const EILSEQ: i32 = 92; // Darwin value
++    set_errno(env, 0);
++    let s = env.mem.read(src);
++    let mut i: GuestUSize = 0;
++    loop {
++        if !dst.is_null() && i >= len {
++            env.mem.write(src, s + i);
++            return i;
++        }
++        let wc = env.mem.read(s + i);
++        if wc == 0 {
++            if !dst.is_null() {
++                env.mem.write(dst + i, b'\0');
++                env.mem.write(src, Ptr::null());
++            }
++            return i;
++        }
++        if !(0..=255).contains(&wc) {
++            set_errno(env, EILSEQ);
++            if !dst.is_null() {
++                env.mem.write(src, s + i);
++            }
++            return GuestUSize::MAX;
++        }
++        if !dst.is_null() {
++            env.mem.write(dst + i, wc as u8);
++        }
++        i += 1;
++    }
++}
++
+ // Functions shared with string.rs
+ 
+ fn wmemset(
+@@ -192,6 +233,7 @@ fn wcslcpy(
+ pub const FUNCTIONS: FunctionExports = &[
+     export_c_func!(btowc(_)),
+     export_c_func!(wctob(_)),
++    export_c_func!(wcsrtombs(_, _, _, _)),
+     // Functions shared with string.rs
+     export_c_func!(wmemset(_, _, _)),
+     export_c_func!(wmemcpy(_, _, _)),
