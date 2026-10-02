@@ -1,0 +1,43 @@
+diff --git a/src/frameworks/uikit/ui_touch.rs b/src/frameworks/uikit/ui_touch.rs
+index 1461475d..5278ea23 100644
+--- a/src/frameworks/uikit/ui_touch.rs
++++ b/src/frameworks/uikit/ui_touch.rs
+@@ -245,6 +245,19 @@ fn handle_touches_down(env: &mut Environment, map: HashMap<FingerId, Coords>) {
+             );
+             continue;
+         } else {
++            // Temporary diagnostics (touchHLE-zzzzz-touchdebug.patch)
++            {
++                let class: crate::objc::Class = msg![env; view class];
++                let class_name = env.objc.get_class_name(class).to_string();
++                let f: CGRect = msg![env; view frame];
++                log!(
++                    "TOUCH at {:?} -> {} {:?} frame {:?}",
++                    location_in_window,
++                    class_name,
++                    view,
++                    f
++                );
++            }
+             log_dbg!(
+                 "Found view {:?} with frame {:?} for touch at {:?} in window {:?}",
+                 view,
+diff --git a/src/frameworks/uikit/ui_view/ui_control.rs b/src/frameworks/uikit/ui_view/ui_control.rs
+index f26dc51d..7d99a64d 100644
+--- a/src/frameworks/uikit/ui_view/ui_control.rs
++++ b/src/frameworks/uikit/ui_view/ui_control.rs
+@@ -310,6 +310,14 @@ forControlEvents:(UIControlEvents)events {
+         forEvent:(id)event { // UIEvent*
+     assert!(target != nil); // TODO
+ 
++    let sel_str = action.as_str(&env.mem);
++    // Temporary diagnostics (touchHLE-zzzzz-touchdebug.patch)
++    {
++        let sel_owned = sel_str.to_string();
++        let class: crate::objc::Class = msg![env; target class];
++        let class_name = env.objc.get_class_name(class).to_string();
++        log!("ACTION {} sent to {} {:?} by {:?}", sel_owned, class_name, target, this);
++    }
+     let sel_str = action.as_str(&env.mem);
+     let colon_count = sel_str.bytes().filter(|&b| b == b':').count();
+     match colon_count {

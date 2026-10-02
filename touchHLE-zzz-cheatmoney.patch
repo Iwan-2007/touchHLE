@@ -1,0 +1,85 @@
+diff --git a/src/frameworks/uikit.rs b/src/frameworks/uikit.rs
+index dfe04100..5f4e2ec5 100644
+--- a/src/frameworks/uikit.rs
++++ b/src/frameworks/uikit.rs
+@@ -100,6 +100,48 @@ pub struct State {
+     ui_responder: ui_responder::State,
+ }
+ 
++/// Cheat for Zombie Attack! Second Wave XL 2.2.1: adds `amount` to the money
++/// of the game in progress.
++///
++/// The game object is found from the app's global pointer (at 0x15d244 in
++/// this version of the binary, read by the function at 0x2890), then
++/// `+0x168`, then `+0x210` (or `+0x20c` in cooperative mode). The money is at
++/// `+8` in that object (the save file loader writes it there).
++fn cheat_add_money(env: &mut Environment, amount: i32) {
++    use crate::mem::{ConstPtr, MutPtr};
++    let read = |env: &Environment, addr: u32| -> u32 {
++        env.mem.read(ConstPtr::<u32>::from_bits(addr))
++    };
++    // Only for that exact binary: check the code of the global getter.
++    if read(env, 0x2890) != 0xe59f0004 || read(env, 0x2894) != 0xe5900000 {
++        log!("F1 cheat: this isn't Zombie Attack! Second Wave XL 2.2.1, ignoring.");
++        return;
++    }
++    let app = read(env, 0x15d244);
++    if app == 0 {
++        log!("F1 cheat: game not started yet.");
++        return;
++    }
++    let holder = read(env, app + 0x168);
++    if holder == 0 {
++        log!("F1 cheat: no game in progress.");
++        return;
++    }
++    let mut game = read(env, holder + 0x210);
++    if game == 0 {
++        game = read(env, holder + 0x20c);
++    }
++    if game == 0 {
++        log!("F1 cheat: no game in progress.");
++        return;
++    }
++    let money_ptr = MutPtr::<i32>::from_bits(game + 8);
++    let old = env.mem.read(money_ptr);
++    let new = old.saturating_add(amount);
++    env.mem.write(money_ptr, new);
++    log!("F1 cheat: money {} -> {}", old, new);
++}
++
+ /// For use by `NSRunLoop`: handles any events that have queued up.
+ ///
+ /// Returns the next time this function must be called, if any, e.g. the next
+@@ -149,6 +191,7 @@ pub fn handle_events(env: &mut Environment) -> Option<Instant> {
+                     log!("Ignoring EnterDebugger event: no debugger connected.");
+                 }
+             }
++            Event::CheatAddMoney => cheat_add_money(env, 1000),
+             Event::TextInput(text_event) => {
+                 let responder = env.framework_state.uikit.ui_responder.first_responder;
+                 let class = msg![env; responder class];
+diff --git a/src/window.rs b/src/window.rs
+index d4eae998..0520da58 100644
+--- a/src/window.rs
++++ b/src/window.rs
+@@ -164,6 +164,8 @@ pub enum Event {
+     /// take over.
+     EnterDebugger,
+     TextInput(TextInputEvent),
++    /// User pressed F1: Zombie Attack! Second Wave cheat (+1000 money).
++    CheatAddMoney,
+ }
+ 
+ pub enum BatteryState {
+@@ -824,6 +826,10 @@ impl Window {
+                     echo!("F12 pressed, EnterDebugger event queued.");
+                     Event::EnterDebugger
+                 }
++                E::KeyDown {
++                    keycode: Some(sdl2::keyboard::Keycode::F1),
++                    ..
++                } => Event::CheatAddMoney,
+                 E::KeyDown {
+                     keycode: Some(sdl2::keyboard::Keycode::Backspace),
+                     ..

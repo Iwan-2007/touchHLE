@@ -1,0 +1,45 @@
+diff --git a/src/lib.rs b/src/lib.rs
+index fcfec3fb..55d7f292 100644
+--- a/src/lib.rs
++++ b/src/lib.rs
+@@ -115,6 +115,16 @@ Special options:
+ ";
+ 
+ pub fn main<T: Iterator<Item = String>>(mut args: T) -> Result<(), String> {
++    // When the output is redirected to a file, start it with a UTF-8 byte
++    // order mark so that text editors read it correctly. (Not done in a
++    // terminal, where it would just be an unwanted character.)
++    {
++        use std::io::{IsTerminal, Write};
++        let mut stderr = std::io::stderr();
++        if !stderr.is_terminal() {
++            let _ = stderr.write_all(log::UTF8_BOM);
++        }
++    }
+     echo!(
+         "touchHLE {}{}{} — https://touchhle.org/",
+         branding(),
+diff --git a/src/log.rs b/src/log.rs
+index af0ae3ad..4da1ca5f 100644
+--- a/src/log.rs
++++ b/src/log.rs
+@@ -13,9 +13,18 @@ use std::sync::LazyLock;
+ /// All the logging macros print to stderr or (on Android) logcat, but this
+ /// is not convenient for users who aren't accustomed to command-line tools or
+ /// who don't have access to ADB, so we also write to a log file.
++/// UTF-8 byte order mark: invisible, but tells editors the text is UTF-8.
++pub const UTF8_BOM: &[u8] = b"\xEF\xBB\xBF";
++
+ pub fn get_log_file() -> &'static File {
+     static LOG_FILE: LazyLock<File> = LazyLock::new(|| {
+-        File::create(crate::paths::user_data_base_path().join("touchHLE_log.txt")).unwrap()
++        let mut file =
++            File::create(crate::paths::user_data_base_path().join("touchHLE_log.txt")).unwrap();
++        // UTF-8 byte order mark, so that text editors (e.g. Windows Notepad)
++        // don't have to guess the encoding, which they sometimes get wrong.
++        use std::io::Write;
++        let _ = file.write_all(UTF8_BOM);
++        file
+     });
+ 
+     &LOG_FILE
