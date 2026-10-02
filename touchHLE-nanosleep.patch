@@ -1,0 +1,24 @@
+diff --git a/src/libc/time.rs b/src/libc/time.rs
+index 37ee9472..97e9145f 100644
+--- a/src/libc/time.rs
++++ b/src/libc/time.rs
+@@ -521,8 +521,19 @@ fn nanosleep(env: &mut Environment, rqtp: ConstPtr<timespec>, _rmtp: MutPtr<time
+     let tv_sec = t.tv_sec;
+     let tv_nsec = t.tv_nsec;
+     log_dbg!("nanosleep {} {}", tv_sec, tv_nsec);
++    // Like the real nanosleep(), reject an invalid duration without sleeping.
++    // Zombie Attack! Second Wave appears to ask for a tv_nsec of about
++    // 2 billion: honouring it froze the game for over 2 seconds each time.
++    if tv_sec < 0 || !(0..1_000_000_000).contains(&tv_nsec) {
++        log!("nanosleep({tv_sec} s, {tv_nsec} ns): invalid duration, returning EINVAL");
++        set_errno(env, crate::libc::errno::EINVAL);
++        return -1;
++    }
+     let total_sleep = Duration::from_secs(tv_sec.try_into().unwrap())
+         + Duration::from_nanos(tv_nsec.try_into().unwrap());
++    if total_sleep >= Duration::from_millis(500) {
++        log!("nanosleep({tv_sec} s, {tv_nsec} ns): long sleep");
++    }
+     env.sleep(total_sleep);
+     0 // success
+ }
