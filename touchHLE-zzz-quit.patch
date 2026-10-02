@@ -1,0 +1,73 @@
+diff --git a/src/environment.rs b/src/environment.rs
+index 131c45d6..fbc5ed06 100644
+--- a/src/environment.rs
++++ b/src/environment.rs
+@@ -1864,6 +1864,15 @@ impl Environment {
+                 // blocked on another thread waiting for a deferred return,
+                 // it could.
+                 // TODO: handle a thread waiting on condition with a timeout
++                if crate::frameworks::uikit::ui_application::EXITING
++                    .load(std::sync::atomic::Ordering::Relaxed)
++                {
++                    // Typically the app waits for one of its threads to
++                    // finish, after asking it to with pthread_cancel(), which
++                    // isn't supported. It was quitting anyway.
++                    echo!("App is quitting but its threads are all waiting, exiting.");
++                    std::process::exit(0);
++                }
+                 panic!("No active threads, program has deadlocked!");
+             }
+         }
+diff --git a/src/frameworks/uikit/ui_application.rs b/src/frameworks/uikit/ui_application.rs
+index edfe33ae..1504154d 100644
+--- a/src/frameworks/uikit/ui_application.rs
++++ b/src/frameworks/uikit/ui_application.rs
+@@ -446,7 +446,11 @@ pub(super) fn UIApplicationMain(
+ }
+ 
+ /// Tell the app it's about to quit and then exit.
++/// Set once the app has been told to terminate, see [exit].
++pub static EXITING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
++
+ pub(super) fn exit(env: &mut Environment) {
++    EXITING.store(true, std::sync::atomic::Ordering::Relaxed);
+     let ui_application: id = msg_class![env; UIApplication sharedApplication];
+ 
+     let center: id = msg_class![env; NSNotificationCenter defaultCenter];
+diff --git a/src/libc/pthread/thread.rs b/src/libc/pthread/thread.rs
+index 02e3a36d..408b0215 100644
+--- a/src/libc/pthread/thread.rs
++++ b/src/libc/pthread/thread.rs
+@@ -278,6 +278,24 @@ fn pthread_cancel(_env: &mut Environment, thread: pthread_t) -> i32 {
+     0
+ }
+ 
++fn pthread_exit(env: &mut Environment, value_ptr: MutVoidPtr) {
++    if env.current_thread == 0 {
++        echo!("App called pthread_exit() on the main thread, exiting.");
++        std::process::exit(0);
++    }
++    log_dbg!("pthread_exit({:?}) on thread {}", value_ptr, env.current_thread);
++    // Return straight to the host code that called this thread's start
++    // routine, abandoning the guest stack: the thread then ends as if the
++    // start routine had returned `value_ptr`. (The return-to-host routine is
++    // set both as the next instruction and as the return address, so it is
++    // reached however this function call returns.)
++    let return_to_host = env.dyld.return_to_host_routine();
++    let regs = env.cpu.regs_mut();
++    regs[0] = value_ptr.to_bits();
++    regs[crate::cpu::Cpu::LR] = return_to_host.addr_with_thumb_bit();
++    env.cpu.branch(return_to_host);
++}
++
+ fn pthread_join(env: &mut Environment, thread: pthread_t, retval: MutPtr<MutVoidPtr>) -> i32 {
+     let current_thread = env.current_thread;
+     let curr_pthread_t = pthread_self(env);
+@@ -430,6 +448,7 @@ pub const FUNCTIONS: FunctionExports = &[
+     export_c_func!(pthread_self()),
+     export_c_func!(pthread_join(_, _)),
+     export_c_func!(pthread_cancel(_)),
++    export_c_func!(pthread_exit(_)),
+     export_c_func!(pthread_detach(_)),
+     export_c_func!(pthread_setcanceltype(_, _)),
+     export_c_func!(pthread_testcancel()),

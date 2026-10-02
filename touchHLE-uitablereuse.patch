@@ -1,0 +1,99 @@
+diff --git a/src/frameworks/uikit/ui_view/ui_scroll_view/ui_table_view.rs b/src/frameworks/uikit/ui_view/ui_scroll_view/ui_table_view.rs
+index 554731cf..307640c3 100644
+--- a/src/frameworks/uikit/ui_view/ui_scroll_view/ui_table_view.rs
++++ b/src/frameworks/uikit/ui_view/ui_scroll_view/ui_table_view.rs
+@@ -41,6 +41,10 @@ pub struct UITableViewHostObject {
+     cells: Vec<(id, NSInteger, NSInteger)>,
+     /// Section header/footer views currently laid out. Strong references.
+     section_views: Vec<id>,
++    /// Cells from previous layouts, kept for dequeueReusableCellWithIdentifier:
++    /// like on iOS. Strong references. Keeping them alive also matters
++    /// because apps may hold on to a cell pointer across reloadData.
++    reuse_pool: Vec<id>,
+     selected: Option<(NSInteger, NSInteger)>,
+     loaded: bool,
+ }
+@@ -58,6 +62,7 @@ impl Default for UITableViewHostObject {
+             background_view: nil,
+             cells: Vec::new(),
+             section_views: Vec::new(),
++            reuse_pool: Vec::new(),
+             selected: None,
+             loaded: false,
+         }
+@@ -195,7 +200,11 @@ fn reload_data(env: &mut Environment, this: id) {
+     host.loaded = true;
+     for (cell, _, _) in old_cells {
+         () = msg![env; cell removeFromSuperview];
+-        release(env, cell);
++        // Keep our reference: the cell goes to the reuse pool.
++        env.objc
++            .borrow_mut::<UITableViewHostObject>(this)
++            .reuse_pool
++            .push(cell);
+     }
+     for view in old_section_views {
+         () = msg![env; view removeFromSuperview];
+@@ -318,10 +327,14 @@ pub const CLASSES: ClassExports = objc_classes! {
+     let host = env.objc.borrow_mut::<UITableViewHostObject>(this);
+     let cells = std::mem::take(&mut host.cells);
+     let section_views = std::mem::take(&mut host.section_views);
++    let reuse_pool = std::mem::take(&mut host.reuse_pool);
+     let others = [host.table_header_view, host.table_footer_view, host.background_view];
+     for (cell, _, _) in cells {
+         release(env, cell);
+     }
++    for cell in reuse_pool {
++        release(env, cell);
++    }
+     for view in section_views {
+         release(env, view);
+     }
+@@ -417,8 +430,26 @@ pub const CLASSES: ClassExports = objc_classes! {
+     () = msg![env; this _touchHLE_loadIfNeeded];
+ }
+ 
+-// No cell reuse: apps then create a new cell, which is always correct.
+-- (id)dequeueReusableCellWithIdentifier:(id)_identifier {
++- (id)dequeueReusableCellWithIdentifier:(id)identifier { // NSString*
++    if identifier == nil {
++        return nil;
++    }
++    let pool = env.objc.borrow::<UITableViewHostObject>(this).reuse_pool.clone();
++    for (idx, cell) in pool.into_iter().enumerate() {
++        let cell_identifier: id = msg![env; cell reuseIdentifier];
++        if cell_identifier == nil {
++            continue;
++        }
++        let matches: bool = msg![env; cell_identifier isEqualToString:identifier];
++        if matches {
++            env.objc
++                .borrow_mut::<UITableViewHostObject>(this)
++                .reuse_pool
++                .remove(idx);
++            // Hand our reference over to the caller.
++            return crate::objc::autorelease(env, cell);
++        }
++    }
+     nil
+ }
+ 
+diff --git a/src/objc/messages.rs b/src/objc/messages.rs
+index 03a6f995..bea2a5af 100644
+--- a/src/objc/messages.rs
++++ b/src/objc/messages.rs
+@@ -192,7 +192,13 @@ fn objc_msgSend_inner(
+     }
+ 
+     let orig_class = super2.unwrap_or_else(|| ObjC::read_isa(receiver, &env.mem));
+-    assert!(orig_class != nil);
++    if orig_class == nil {
++        panic!(
++            "Message {} sent to deallocated object {:?}",
++            selector.as_str(&env.mem),
++            receiver
++        );
++    }
+     if !skip_initialize {
+         maybe_initialize_class(env, receiver);
+     }
