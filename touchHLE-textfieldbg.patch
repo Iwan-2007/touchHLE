@@ -1,0 +1,24 @@
+diff --git a/src/frameworks/uikit/ui_view/ui_control/ui_text_field.rs b/src/frameworks/uikit/ui_view/ui_control/ui_text_field.rs
+index e944ab61..33974aab 100644
+--- a/src/frameworks/uikit/ui_view/ui_control/ui_text_field.rs
++++ b/src/frameworks/uikit/ui_view/ui_control/ui_text_field.rs
+@@ -216,6 +216,19 @@ pub const CLASSES: ClassExports = objc_classes! {
+ - (())setEnablesReturnKeyAutomatically:(bool)enables {
+     todo_objc_setter!(this, enables);
+ }
++// Background images aren't drawn yet: the field keeps its plain look.
++- (())setBackground:(id)image { // UIImage*
++    todo_objc_setter!(this, image);
++}
++- (id)background {
++    nil
++}
++- (())setDisabledBackground:(id)image { // UIImage*
++    todo_objc_setter!(this, image);
++}
++- (id)disabledBackground {
++    nil
++}
+ 
+ - (())touchesBegan:(id)_touches // NSSet* of UITouch*
+          withEvent:(id)_event { // UIEvent*
