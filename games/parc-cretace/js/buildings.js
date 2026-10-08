@@ -2508,51 +2508,71 @@
     },
   });
   def('krill_net', {
-    W: 2, D: 2, H: 104, park: 'sea', grow: true,
+    W: 2, D: 2, H: 130, park: 'sea', grow: true,
     draw(b) {
       seabed(2, 2, 0.05, 11);
-      const p0 = P(0.3, 0.75, 3), p1 = P(1.7, 0.75, 3);
-      for (const p of [p0, p1]) { X.fillStyle = lin(p[0] - 3, 0, p[0] + 3, 0, [[0, '#4a3a2a'], [0.6, '#9a7a5a'], [1, '#5a4a3a']]); X.fillRect(p[0] - 3, p[1] - 80, 6, 80); ell(p[0], p[1] - 80, 3, 1.5); fs('#7a6a5a'); for (let i = 0; i < 3; i++) { ell(p[0] + (i % 2 ? 3 : -3), p[1] - 20 - i * 18, 2, 1.6); fs('#e8e0d0', '#6a6458', 0.5); } }
-      // net bag
-      onL(0.75, 0.3, () => {
-        const L = 1.4 * HX;
-        const bag = () => { X.beginPath(); X.moveTo(0, -76); X.quadraticCurveTo(L * 0.25, -30, L * 0.5, -18); X.quadraticCurveTo(L * 0.75, -30, L, -76); X.quadraticCurveTo(L * 0.5, -66, 0, -76); X.closePath(); };
-        bag(); fs('rgba(30,80,110,.25)');
-        // krill pile (by growth)
-        const g = b.g;
-        X.save(); bag(); X.clip();
-        const top = -18 - 10 - g * 30;
-        X.beginPath(); X.moveTo(0, 0); X.lineTo(0, top + 8); X.quadraticCurveTo(L * 0.5, top - 6, L, top + 8); X.lineTo(L, 0); X.closePath();
-        fs(lin(0, top, 0, -18, [[0, '#ffb0b8'], [1, '#e8506a']]));
-        const rr = H.rng(5);
-        for (let i = 0; i < 60; i++) { const x = rr() * L, y = top + rr() * 50; ell(x, y, 1.4, 0.9, rr()); fs(i % 3 ? '#ff8a9a' : '#ffd0d8'); }
-        X.restore();
-        X.save(); bag(); X.clip();
-        X.strokeStyle = 'rgba(240,240,230,.75)'; X.lineWidth = 0.7;
-        for (let x = -60; x < L + 60; x += 6) { X.beginPath(); X.moveTo(x, -80); X.lineTo(x + 60, 0); X.moveTo(x, -80); X.lineTo(x - 60, 0); X.stroke(); }
-        X.restore();
-        bag(); fs(null, '#d8d0b8', 1.4);
-        line(0, -76, L, -76, '#c8b890', 1.6);
+      const wood = '#8a6440', g = b.g;
+      // wooden gantry (back) with a winch
+      for (const u of [0.24, 1.46]) box(u, 0.48, u + 0.12, 0.6, 3, 92, wood, { tex: TX.planks(30, 3) });
+      for (const [ua, ub] of [[0.36, 0.62], [1.2, 1.46]]) {
+        const a = P(ua === 0.36 ? ua : ub, 0.54, ua === 0.36 ? 40 : 40), c = P(ua === 0.36 ? ub : ua, 0.54, 84);
+        X.beginPath(); X.moveTo(a[0], a[1]); X.lineTo(c[0], c[1]); X.strokeStyle = shade(wood, -0.35); X.lineWidth = 5; X.stroke(); X.strokeStyle = wood; X.lineWidth = 3.4; X.stroke();
+      }
+      box(0.18, 0.46, 1.64, 0.62, 84, 94, wood, { tex: TX.planks(5, 4) });
+      box(0.36, 0.64, 0.62, 0.86, 3, 16, '#5a6a74', {});
+      const wp = P(0.49, 0.75, 16);
+      ell(wp[0], wp[1] - 5, 8, 5.5); fs(lin(wp[0] - 8, 0, wp[0] + 8, 0, [[0, '#6a5a3a'], [1, '#c0a070']]), '#3a2a10', 1);
+      // net bag hanging from the beam, filled with krill as production grows
+      const top = P(0.95, 0.54, 84), bx = top[0], by = top[1];
+      line(bx, by, bx, by + 22, '#d8c8a0', 1.6);
+      line(wp[0], wp[1] - 8, ...P(0.3, 0.54, 86), '#d8c8a0', 1);
+      const bagPath = () => {
+        X.beginPath(); X.moveTo(bx - 8, by + 22);
+        X.bezierCurveTo(bx - 34, by + 34, bx - 34, by + 76, bx, by + 80);
+        X.bezierCurveTo(bx + 34, by + 76, bx + 34, by + 34, bx + 8, by + 22); X.closePath();
+      };
+      bagPath(); fs('rgba(30,80,110,.3)');
+      X.save(); bagPath(); X.clip();
+      const lvl = by + 80 - (12 + g * 50);
+      X.beginPath(); X.moveTo(bx - 40, by + 90); X.lineTo(bx - 40, lvl + 4); X.quadraticCurveTo(bx, lvl - 6, bx + 40, lvl + 4); X.lineTo(bx + 40, by + 90); X.closePath();
+      fs(lin(0, lvl, 0, by + 80, [[0, '#ffb8c4'], [0.5, '#ff7a90'], [1, '#d8405a']]));
+      const rr = H.rng(5);
+      for (let i = 0; i < 70; i++) { const x = bx - 30 + rr() * 60, y = lvl + rr() * 60; ell(x, y, 1.6, 0.9, rr() * 3); fs(i % 3 ? '#ff8a9a' : '#ffe0e6'); }
+      X.strokeStyle = 'rgba(245,240,225,.8)'; X.lineWidth = 0.8;
+      for (let x = -80; x < 80; x += 6) { X.beginPath(); X.moveTo(bx + x, by + 18); X.lineTo(bx + x + 64, by + 82); X.moveTo(bx + x, by + 18); X.lineTo(bx + x - 64, by + 82); X.stroke(); }
+      X.restore();
+      bagPath(); fs(null, '#cfc29c', 1.6);
+      ell(bx, by + 22, 9, 3); fs('#e8742a', '#5a2a0a', 1);
+      // round krill tank in front (static part: rim + swirling pink water)
+      const tc = P(1.32, 1.28, 3);
+      cyl(tc[0], tc[1], 26, 14, '#4f7a8c', {
+        top: false,
+        tex: (x, y, R, h) => { for (let i = 0; i < 9; i++) { const q = x - R + (i + 0.5) * R * 2 / 9; line(q, y - h, q, y + 12, 'rgba(255,255,255,.18)', 1); } },
       });
-      // winch + barrels
-      const wp = P(1.45, 1.45, 3);
-      box(1.3, 1.3, 1.62, 1.62, 3, 12, '#5a6a74', {});
-      ell(wp[0], wp[1] - 18, 8, 6); fs(lin(wp[0] - 8, 0, wp[0] + 8, 0, [[0, '#6a5a3a'], [1, '#c0a070']]), '#3a2a10', 1);
-      line(wp[0], wp[1] - 22, ...P(1.7, 0.75, 70), '#c8b890', 1);
-      const nb = 1 + Math.round(2 * b.g);
-      for (let i = 0; i < nb; i++) { const p = P(0.45 + i * 0.3, 1.6 + (i % 2) * 0.12, 3); barrel(p[0], p[1], 6.5, 13, '#7a5a3a'); ell(p[0], p[1] - 13, 5, 2.4); fs('#ff7a8a'); }
-      const sg = P(1.75, 1.85, 3);
-      for (const dx of [-10, 10]) { X.fillStyle = '#4a5a64'; X.fillRect(sg[0] + dx - 1, sg[1] - 18, 2, 18); }
-      board(sg[0], sg[1] - 22, 40, 12, 'KRILL', 'navy', 9);
+      ell(tc[0], tc[1] - 14, 26, 13); fs('#2a4a5a', '#1a2e38', 1.2);
+      ell(tc[0], tc[1] - 13, 22.5, 11); fs(rad(tc[0], tc[1] - 13, 2, 23, [[0, '#ff9aac'], [0.7, '#e8607a'], [1, '#8a3a5a']]));
+      X.beginPath(); X.ellipse(tc[0], tc[1] - 14, 26, 13, 0, 0, TAU); X.strokeStyle = '#f0c020'; X.lineWidth = 2; X.stroke();
+      // barrels of krill (more when production is ready)
+      const nb = 1 + Math.round(2 * g);
+      for (let i = 0; i < nb; i++) { const p = P(0.35 + i * 0.28, 1.55 + (i % 2) * 0.14, 3); barrel(p[0], p[1], 6.5, 13, '#7a5a3a'); ell(p[0], p[1] - 13, 5, 2.4); fs('#ff7a8a'); }
+      signL(0.62, 0.66, 89, 42, 13, 'KRILL', 'navy', 9.5);
+      coralClump(...P(1.8, 1.55, 3), 10, 6);
     },
     anim(b) {
-      const t = b.t, c = P(1.0, 0.75, 40);
-      for (let i = 0; i < 12; i++) {
-        const p = fract(t * 0.15 + i / 12);
-        const x = c[0] - 40 + hash(i, 3) * 80 + Math.sin(t + i) * 6, y = c[1] + 10 - p * 50;
+      const t = b.t, tc = P(1.32, 1.28, 16);
+      // swirling krill in the tank
+      for (let i = 0; i < 16; i++) {
+        const a = t * (0.6 + hash(i, 2) * 0.6) + i * 2.4, r = 4 + hash(i, 7) * 16;
+        ell(tc[0] + Math.cos(a) * r, tc[1] + 3 + Math.sin(a) * r * 0.48, 1.6, 0.9, a); X.fillStyle = i % 3 ? 'rgba(255,220,228,.9)' : 'rgba(255,120,150,.9)'; X.fill();
+      }
+      bubbles(tc[0], tc[1] - 2, t, { n: 4, h: 46, spread: 30, seed: 4 });
+      // a few krill drifting out of the net bag
+      const c = P(0.95, 0.54, 40);
+      for (let i = 0; i < 8; i++) {
+        const p = fract(t * 0.15 + i / 8);
+        const x = c[0] - 30 + hash(i, 3) * 60 + Math.sin(t + i) * 6, y = c[1] + 14 - p * 50;
         ell(x, y, 1.2, 0.8, t + i); X.fillStyle = `rgba(255,140,160,${Math.sin(p * PI) * 0.9})`; X.fill();
       }
-      bubbles(c[0], c[1] - 30, t, { n: 3, h: 40, spread: 30, seed: 4 });
     },
   });
 
@@ -2919,49 +2939,92 @@
       bubbles(...P(1.05, 0.98, 30), b.t, { n: 4, h: 50, spread: 10, seed: 5 });
     },
   });
+  /** Stroke the current path as a bone: dark outline, then bone colour. */
+  function boneStroke(w, col) {
+    X.lineCap = 'round'; X.lineJoin = 'round';
+    X.strokeStyle = '#5a4a32'; X.lineWidth = w + 1.8; X.stroke();
+    X.strokeStyle = col || '#eee2c4'; X.lineWidth = w; X.stroke();
+  }
+  /** Giant marine-reptile skeleton arching out of a rocky outcrop, half-buried in the sand. */
   def('fossil_skeleton', {
-    W: 2, D: 2, H: 80, park: 'sea',
+    W: 2, D: 2, H: 96, park: 'sea',
     draw(b) {
       seabed(2, 2, 0.05, 37);
-      const bone = '#efe4c8', bink = '#6a5a40';
-      rock(...P(0.55, 0.55, 3), 34, 26, '#7a8a8a', 11);
-      rock(...P(1.2, 0.4, 3), 24, 20, '#6f8288', 12);
-      rock(...P(0.35, 1.2, 3), 20, 14, '#82949a', 13);
-      // vertebral column arching over the rocks
-      const spine = [];
-      for (let i = 0; i < 14; i++) { const f = i / 13; spine.push([lerp(-62, 58, f), -14 - Math.sin(f * PI) * 34 + f * 12]); }
-      const c = P(1.0, 1.0, 3);
-      // ribs (behind)
-      for (let i = 3; i < 11; i++) {
-        const [x, y] = spine[i];
-        for (const sd of [-1, 1]) {
-          X.beginPath(); X.moveTo(c[0] + x, c[1] + y); X.quadraticCurveTo(c[0] + x + sd * 10, c[1] + y + 10, c[0] + x + sd * 4, c[1] + y + 24);
-          X.strokeStyle = bink; X.lineWidth = 3.4; X.lineCap = 'round'; X.stroke(); X.strokeStyle = bone; X.lineWidth = 2.2; X.stroke();
-        }
+      const bone = '#eee2c4', bink = '#5a4a32', boneD = '#cdbf9c';
+      // rocky outcrop behind the skeleton
+      rock(...P(0.5, 0.42, 3), 42, 44, '#6a7e86', 12);
+      rock(...P(1.08, 0.24, 3), 28, 26, '#7f9298', 14);
+      rock(...P(0.24, 0.92, 3), 30, 36, '#76888c', 16);
+      // strata lines on the big rock
+      const r0 = P(0.5, 0.42, 3);
+      for (let i = 0; i < 3; i++) { X.beginPath(); X.moveTo(r0[0] - 34, r0[1] - 10 - i * 9); X.quadraticCurveTo(r0[0], r0[1] - 16 - i * 10, r0[0] + 30, r0[1] - 8 - i * 9); X.strokeStyle = 'rgba(30,45,50,.3)'; X.lineWidth = 1.2; X.stroke(); }
+      coralBranch(r0[0] - 12, r0[1] - 34, 14, '#b060d0', 21);
+      coralBranch(r0[0] + 14, r0[1] - 30, 11, '#ff7a6a', 23);
+      // spine: from inside the rock (left) arching over to the skull (right)
+      const N = 17, sp = [];
+      for (let i = 0; i < N; i++) {
+        const f = i / (N - 1);
+        sp.push({ i, f, u: lerp(0.4, 1.46, f), v: lerp(1.4, 0.66, f), z: 8 + Math.sin(Math.min(1, f * 1.12) * PI) * 50 + f * 8 });
       }
-      // sand covering the rib ends
-      ell(c[0] - 4, c[1] + 17, 52, 8); fs(lin(0, c[1] + 9, 0, c[1] + 25, [[0, '#ded2a2'], [1, 'rgba(217,204,156,.9)']]));
-      X.beginPath(); X.ellipse(c[0] - 4, c[1] + 17, 52, 8, 0, PI + 0.2, -0.2); fs(null, 'rgba(160,140,90,.6)', 1);
-      for (let i = spine.length - 1; i >= 0; i--) {
-        const [x, y] = spine[i], s = 1 - i * 0.035;
-        line(c[0] + x, c[1] + y, c[0] + x - 1, c[1] + y - 7 * s, bink, 3.6); line(c[0] + x, c[1] + y, c[0] + x - 1, c[1] + y - 7 * s, bone, 2.2);
-        ell(c[0] + x, c[1] + y, 4.5 * s, 3.5 * s); fs(bone, bink, 1);
+      const ribK = f => (f > 0.16 && f < 0.66 ? Math.sin((f - 0.16) / 0.5 * PI) : 0);
+      const rib = (s, sd) => {
+        const k = ribK(s.f);
+        if (k < 0.15 || s.i % 2) return;
+        const o = 0.14 + 0.3 * k;
+        // ribs bulge outwards and sweep back towards the tail
+        const a = P(s.u, s.v, s.z), c = P(s.u + sd * o * 1.6 + 0.05, s.v + sd * o * 1.6 - 0.04, s.z * 0.72), e = P(s.u + sd * o - 0.16, s.v + sd * o + 0.11, 2);
+        X.beginPath(); X.moveTo(a[0], a[1]); X.quadraticCurveTo(c[0], c[1], e[0], e[1]);
+        boneStroke(2.2 + k * 1.2, sd < 0 ? boneD : bone);
+      };
+      for (const s of sp) rib(s, -1);                       // far ribs
+      // sand drift along the belly (covers the far rib ends)
+      const m0 = P(0.62, 1.05, 3), m1 = P(1.28, 0.62, 3);
+      X.beginPath(); X.moveTo(m0[0] - 14, m0[1] + 2); X.quadraticCurveTo((m0[0] + m1[0]) / 2, (m0[1] + m1[1]) / 2 - 12, m1[0] + 14, m1[1] + 2); X.closePath();
+      fs(lin(0, m1[1] - 10, 0, m1[1] + 4, [[0, '#e6dab0'], [1, '#cfc08e']]));
+      // vertebrae with neural spines
+      for (let i = 0; i < N; i++) {
+        const s = sp[i], p = P(s.u, s.v, s.z), r = 3.4 + ribK(s.f) * 1.6 - (s.f > 0.8 ? (s.f - 0.8) * 6 : 0);
+        if (i) { const q = P(sp[i - 1].u, sp[i - 1].v, sp[i - 1].z); X.beginPath(); X.moveTo(q[0], q[1]); X.lineTo(p[0], p[1]); boneStroke(2.6, boneD); }
+        if (s.f < 0.8) { X.beginPath(); X.moveTo(p[0], p[1]); X.lineTo(p[0] - 1.5, p[1] - 6 - ribK(s.f) * 6); boneStroke(1.8); }
+        ell(p[0], p[1], r, r * 0.8); fs(lin(0, p[1] - r, 0, p[1] + r, [[0, '#fff6dc'], [1, boneD]]), bink, 1);
       }
-      // skull (front right, on the sand)
-      const sx = c[0] + 46, sy = c[1] - 2;
-      X.beginPath(); X.moveTo(sx - 8, sy - 10); X.quadraticCurveTo(sx + 6, sy - 18, sx + 22, sy - 10); X.lineTo(sx + 46, sy - 2); X.lineTo(sx + 46, sy + 2); X.lineTo(sx + 20, sy + 4); X.quadraticCurveTo(sx, sy + 8, sx - 10, sy + 2); X.closePath();
-      fs(lin(sx, sy - 18, sx, sy + 8, [[0, '#fff8e8'], [1, '#c8b890']]), bink, 1.4);
-      ell(sx + 4, sy - 6, 5, 4); fs('#3a3020', bink, 0.8);
-      ell(sx + 18, sy - 7, 2, 1.5); fs('#3a3020');
-      H.teeth(X, sx + 10, sy + 2.5, sx + 45, sy + 1, 10, 3.5, false, '#fffaf0');
-      X.beginPath(); X.moveTo(sx - 6, sy + 4); X.quadraticCurveTo(sx + 10, sy + 12, sx + 40, sy + 8); X.strokeStyle = bink; X.lineWidth = 3; X.stroke(); X.strokeStyle = bone; X.lineWidth = 1.8; X.stroke();
-      // flipper bones
-      const fx = c[0] + 18, fy = c[1] + 18;
-      for (let i = 0; i < 4; i++) { X.beginPath(); X.moveTo(fx, fy); X.lineTo(fx + 8 + i * 4, fy + 8 - i * 2); X.strokeStyle = bink; X.lineWidth = 3; X.stroke(); X.strokeStyle = bone; X.lineWidth = 1.8; X.stroke(); for (let k = 1; k < 3; k++) { ell(fx + (8 + i * 4) * k / 2.4, fy + (8 - i * 2) * k / 2.4, 1.6, 1.6); fs(bone, bink, 0.6); } }
-      coralBranch(...P(0.25, 0.3, 3), 12, '#ff7a6a', 17);
-      ell(...P(0.9, 0.35, 30), 6, 3); fs('#b060d0', '#5a2a6a', 0.8);
+      // skull, jaws wide open, resting on the sand (towards the right corner)
+      const sk = P(1.5, 0.62, 12);
+      X.save(); X.translate(sk[0] - 2, sk[1]); X.rotate(-0.12);
+      X.beginPath(); X.moveTo(-2, 3); X.quadraticCurveTo(22, 22, 54, 22); X.lineTo(55, 17); X.quadraticCurveTo(26, 14, 4, -1); X.closePath();
+      fs(lin(0, 0, 0, 22, [[0, '#f6ecd4'], [1, '#c4b28a']]), bink, 1.2);
+      H.teeth(X, 12, 7.5, 52, 16.5, 9, 4.2, true, '#fffaf0');
+      X.beginPath(); X.moveTo(-9, 0); X.quadraticCurveTo(-8, -17, 10, -18); X.quadraticCurveTo(30, -16, 62, -2); X.lineTo(62, 2); X.quadraticCurveTo(32, 1, 6, 6); X.quadraticCurveTo(-6, 7, -9, 0); X.closePath();
+      fs(lin(0, -18, 0, 7, [[0, '#fffaea'], [0.6, '#eadcb8'], [1, '#c4b28a']]), bink, 1.3);
+      H.teeth(X, 10, 4.6, 60, 1.6, 12, 4.6, false, '#fffaf0');
+      ell(6, -8, 6.5, 5); fs(rad(6, -8, 1, 7, [[0, '#14100a'], [1, '#3a3020']]), bink, 0.9);
+      ell(-3, -4, 2.6, 4.2, 0.3); fs('#3a3020');
+      ell(46, -6, 2.2, 1.3, -0.2); fs('#3a3020');
+      X.beginPath(); X.moveTo(14, -15); X.quadraticCurveTo(34, -12, 56, -4); X.strokeStyle = 'rgba(255,255,255,.6)'; X.lineWidth = 1.2; X.stroke();
+      X.restore();
+      // near ribs + sand mounds burying their tips
+      for (const s of sp) rib(s, 1);
+      for (const s of sp) { const k = ribK(s.f); if (k < 0.15 || s.i % 2) continue; const o = 0.14 + 0.3 * k, e = P(s.u + o - 0.16, s.v + o + 0.11, 3); ell(e[0], e[1] + 1, 5, 2.4); fs('#dccf9f'); }
+      // front flipper splayed on the sand
+      const fl = P(1.22, 0.98, 4);
+      for (let i = 0; i < 4; i++) {
+        const ex = fl[0] + 6 + i * 5, ey = fl[1] + 12 - i * 1.5;
+        X.beginPath(); X.moveTo(fl[0], fl[1]); X.lineTo(ex, ey); boneStroke(1.7);
+        for (let k = 1; k <= 2; k++) { ell(lerp(fl[0], ex, k / 2.6), lerp(fl[1], ey, k / 2.6), 1.6, 1.4); fs(bone, bink, 0.6); }
+      }
+      ell(fl[0], fl[1], 3, 2.4); fs(bone, bink, 0.8);
+      // the tail disappears into a rock at the front left
+      rock(...P(0.52, 1.62, 3), 30, 30, '#7a8c90', 13);
+      coralClump(...P(0.62, 1.75, 3), 11, 5);
+      starfish(...P(1.55, 1.55, 3), 5, '#ff7a4a');
     },
-    anim(b) { const c = P(1.0, 1.0, 3); sparkle(c[0] + 66, c[1] - 14, 4, 0.5 + 0.5 * Math.sin(b.t * 2.2), '#ffffff'); bubbles(c[0] - 30, c[1] - 50, b.t, { n: 3, h: 40, spread: 10, seed: 9 }); },
+    anim(b) {
+      const sk = P(1.5, 0.62, 12);
+      sparkle(sk[0] + 4, sk[1] - 10, 4, 0.5 + 0.5 * Math.sin(b.t * 2.2), '#ffffff');
+      const r0 = P(0.5, 0.42, 3);
+      bubbles(r0[0] + 4, r0[1] - 40, b.t, { n: 3, h: 44, spread: 10, seed: 9 });
+      fishLoop(...P(1.0, 0.8, 60), 30, 8, b.t, 2, null, 0.7, 3);
+    },
   });
 
   /** Greek column at ground (x, y). */
@@ -3142,10 +3205,11 @@
       fs(lin(...P(0, 0, -6), ...P(4, 0.9, -6), [[0, '#2a5a72'], [0.5, '#3a7a92'], [1, '#1f4a62']]));
       for (const [u, v, r] of [[0.6, 0.3, 10], [3.4, 0.5, 13], [1.4, 0.7, 7]]) { const p = P(u, v, -5); ell(p[0], p[1], r, r * 0.45); fs('#f4f8fb', '#a8bfd0', 0.8); }
       ipath([[0.04, 0.04, 3], [3.96, 0.04, 3]], true); fs(null, '#e8eef2', 2.5);
-      hovercraftAt(2.0, 0.2, 0.7, -4);
+      hovercraftAt(3.1, -0.02, 0.7, -4);
       // apron
       box(0.04, 0.92, 3.96, 2.96, 0, 3, '#aab2b8', { texTop: TT.paving(2, '#aab2b8'), stroke: '#6a747c' });
       ipath([[1.3, 0.98, 3], [3.96, 0.98, 3]], true); fs(null, '#f0c020', 1.6);
+      for (let u = 1.55; u < 3.9; u += 0.45) { const p = P(u, 0.99, 3); cyl(p[0], p[1], 2.6, 5, '#3a4048', { top: '#5a626a' }); }
       slab(1.3, 2.0, 3.96, 2.4, 3, 3.6, '#5a6268');
       ipath([[1.3, 2.2, 3.6], [3.96, 2.2, 3.6]], true); X.setLineDash([6, 6]); fs(null, '#f4f4f4', 1.2); X.setLineDash([]);
       // cliff + tunnel (back left)
@@ -3172,15 +3236,16 @@
       const cc = ['#c8402a', '#2f6aa8', '#e8b830', '#3f8f4a'];
       container(1.6, 2.45, 2.3, 2.75, 3, cc[1]); container(2.4, 2.45, 3.1, 2.75, 3, cc[0]); container(1.65, 2.45, 2.35, 2.75, 18, cc[2]);
       snowTop(1.65, 2.45, 2.35, 2.75, 33, 3, 2);
-      container(3.2, 2.5, 3.9, 2.8, 3, cc[3]);
+      container(2.45, 2.47, 3.05, 2.73, 18, cc[3]); snowTop(2.45, 2.47, 3.05, 2.73, 33, 3, 4);
       // lamp posts
       for (const [u, v] of [[1.45, 2.85], [3.9, 0.98]]) lamp(...P(u, v, 3), 34, true);
-      snowPile(...P(3.6, 2.2, 3), 12);
+      // the hovercraft that just arrived on the apron
+      hovercraftAt(3.02, 1.98, 0.92, 3.6);
     },
     anim(b) {
       const t = b.t;
       const c = P(2.1, 1.25, 44); smoke(c[0], c[1], t, { n: 5, rise: 34, col: '#b8b8b8', a: 0.4, seed: 2 });
-      hovercraftFan(2.0, 0.2, 0.7, -4, t);
+      hovercraftFan(3.1, -0.02, 0.7, -4, t); hovercraftFan(3.02, 1.98, 0.92, 3.6, t);
       for (const [u, v] of [[1.45, 2.85], [3.9, 0.98]]) { const p = P(u, v, 3); glow(p[0], p[1] - 42, 14, '#ffe6a0', 0.35); }
       X.save(); ipath([[0.04, 0.04, -6], [3.96, 0.04, -6], [3.96, 0.92, -6], [0.04, 0.92, -6]]); X.clip();
       for (let i = 0; i < 6; i++) { const p = P(0.3 + hash(i, 2) * 3.4, 0.1 + hash(i, 5) * 0.75, -6), k = fract(t * 0.25 + hash(i, 7)); ell(p[0], p[1], 5 + k * 8, (5 + k * 8) * 0.3); fs(null, `rgba(220,245,255,${0.45 * (1 - k)})`, 1); }
@@ -3188,33 +3253,117 @@
     },
   });
 
-  /** Hovercraft drawn in the iso frame at (u0, v0), scale s (1 = one tile), base height z0. */
+  /** Points of a rounded rectangle in tile space (centre uc, vc; half sizes a × b; corner radius r),
+      sampled by outward-normal angle from a0 to a1 (full outline: 0 → TAU). */
+  function rrUV(uc, vc, a, b, r, a0, a1, n) {
+    const pts = [];
+    for (let i = 0; i < n; i++) {
+      const an = a0 + (i + 0.5) / n * (a1 - a0), cs = Math.cos(an), sn = Math.sin(an);
+      pts.push([uc + (cs >= 0 ? 1 : -1) * (a - r) + cs * r, vc + (sn >= 0 ? 1 : -1) * (b - r) + sn * r]);
+    }
+    return pts;
+  }
+  /** Convex hull of screen points (monotone chain). */
+  function hull2(pts) {
+    const p = pts.slice().sort((A, B) => A[0] - B[0] || A[1] - B[1]);
+    const cr = (o, a, b) => (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0]);
+    const lo = [], up = [];
+    for (const q of p) { while (lo.length > 1 && cr(lo[lo.length - 2], lo[lo.length - 1], q) <= 0) lo.pop(); lo.push(q); }
+    for (let i = p.length - 1; i >= 0; i--) { const q = p[i]; while (up.length > 1 && cr(up[up.length - 2], up[up.length - 1], q) <= 0) up.pop(); up.push(q); }
+    return lo.slice(0, -1).concat(up.slice(0, -1));
+  }
+  /** Solid extruded from a convex (u, v) outline between heights z0 and z1 (side silhouette + top face). */
+  function prism(outline, z0, z1, side, top, st, lw) {
+    const scr = [];
+    for (const [u, v] of outline) { scr.push(P(u, v, z0)); scr.push(P(u, v, z1)); }
+    spath(hull2(scr)); fs(side, st, lw || 1);
+    spath(outline.map(([u, v]) => P(u, v, z1))); fs(top, st, lw || 1);
+  }
+
+  /** Hovercraft drawn in the iso frame at (u0, v0), scale s (1 = one tile), base height z0.
+      Bow towards +u: black inflatable skirt, orange hull, white cabin, twin ducted fans with rudders at the stern. */
+  const HOVER_FANS = [0.35, 0.65], HOVER_R = 6.6;
   function hovercraftAt(u0, v0, s, z0) {
     const U = (u) => u0 + u * s, V = (v) => v0 + v * s, Z = (z) => z0 + z * s;
-    const c = P(U(0.52), V(0.5), Z(0));
-    blob(c[0], c[1] + 2, 36 * s, 14 * s, 0.25);
-    box(U(0.14), V(0.26), U(0.9), V(0.74), Z(0), Z(9), '#2a2a2e', { stroke: '#000', hi: false });
-    box(U(0.18), V(0.3), U(0.86), V(0.7), Z(9), Z(15), I.orange, {});
-    // fan duct (rear)
-    onR(U(0.26), V(0.5), () => {
-      const zc = -Z(28), r = 10 * s;
-      line(-r * 0.6, zc + r * 0.8, -r * 0.4, -Z(14), '#3a3e44', 2.2 * s); line(r * 0.6, zc + r * 0.8, r * 0.4, -Z(14), '#3a3e44', 2.2 * s);
-      ell(0, zc, r, r); fs('rgba(30,34,40,.35)');
-      ell(0, zc, r, r); fs(null, '#2a2e34', 5 * s); ell(0, zc, r, r); fs(null, '#7a8088', 2.4 * s);
-      ell(-r * 0.3, zc - r * 0.75, r * 0.35, r * 0.12, -0.4); fs('rgba(255,255,255,.5)');
-      X.fillStyle = I.orange; X.fillRect(r + 1, zc - r * 0.6, 3 * s, r * 1.2);
+    const uc = U(0.5), vc = V(0.5);
+    const c = P(uc, vc, Z(0));
+    blob(c[0], c[1] + 3 * s, 42 * s, 17 * s, 0.3);
+    const xL = P(U(0.07), V(0.8), 0)[0], xR = P(U(0.93), V(0.2), 0)[0];
+    // inflatable skirt
+    prism(rrUV(uc, vc, 0.44 * s, 0.3 * s, 0.25 * s, 0, TAU, 44), Z(0), Z(8),
+      lin(xL, 0, xR, 0, [[0, '#121416'], [0.55, '#2e3238'], [0.8, '#3a3f46'], [1, '#1a1c20']]), '#3a3e45', '#08090a', 1.1);
+    spath(rrUV(uc, vc, 0.44 * s, 0.3 * s, 0.25 * s, -PI / 4, PI * 0.75, 18).map(([u, v]) => P(u, v, Z(5.5))), true);
+    fs(null, 'rgba(255,255,255,.16)', 1.6 * s);
+    // hull
+    const hullC = I.orange;
+    prism(rrUV(uc, vc, 0.38 * s, 0.24 * s, 0.18 * s, 0, TAU, 40), Z(8), Z(13),
+      lin(xL, 0, xR, 0, [[0, shade(hullC, -0.3)], [0.6, hullC], [1, shade(hullC, -0.12)]]), shade(hullC, 0.2), ink(hullC), 1);
+    spath(rrUV(uc, vc, 0.38 * s, 0.24 * s, 0.18 * s, -PI / 4, PI * 0.75, 18).map(([u, v]) => P(u, v, Z(10.3))), true);
+    fs(null, '#f8f4ea', 1.5 * s);
+    // deck plates + bollards
+    for (const [u, v] of [[0.8, 0.36], [0.8, 0.64], [0.3, 0.3], [0.3, 0.7]]) { const p = P(U(u), V(v), Z(13)); ell(p[0], p[1] - 1 * s, 1.6 * s, 1.1 * s); fs('#d8dde2', '#2a2e32', 0.6); }
+    // stern: rudders, then twin ducted fans
+    for (const fv of HOVER_FANS) {
+      onL(V(fv), U(0.04), () => {
+        rrect(0, -Z(32), 0.11 * HX * s, Z(32) - Z(13), 1.5 * s); fs(lin(0, -Z(32), 0, -Z(13), [[0, '#ff9a4a'], [1, '#c8541a']]), '#5a2a0a', 0.9);
+      });
+    }
+    const R = HOVER_R * s, zc = Z(13) + 4 * s + R;
+    for (let k = 0; k <= 4; k++) {
+      onR(U(0.12 + k * 0.035), V(0.8), () => {
+        for (const fv of HOVER_FANS) {
+          const x = (0.8 - fv) * HX * s;
+          if (k === 0) { line(x - R * 0.5, -zc + R * 0.7, x - R * 0.7, -Z(13), '#3a3e44', 1.8 * s); line(x + R * 0.5, -zc + R * 0.7, x + R * 0.7, -Z(13), '#3a3e44', 1.8 * s); }
+          ell(x, -zc, R, R);
+          if (k < 4) fs(null, k % 2 ? '#aab3ba' : '#8a949c', 3.6 * s);
+          else {
+            fs('rgba(20,26,34,.6)');
+            ell(x, -zc, R, R); fs(null, '#e8ecef', 3.4 * s);
+            ell(x, -zc, R + 1.7 * s, R + 1.7 * s); fs(null, '#5a646c', 0.7 * s);
+            ell(x, -zc, R - 1.7 * s, R - 1.7 * s); fs(null, '#3a4048', 0.7 * s);
+            X.beginPath(); X.arc(x, -zc, R, PI * 0.15, PI * 0.45); X.strokeStyle = I.orange; X.lineWidth = 3.4 * s; X.stroke();
+            line(x - R, -zc, x + R, -zc, 'rgba(200,210,220,.5)', 0.6 * s); line(x, -zc - R, x, -zc + R, 'rgba(200,210,220,.5)', 0.6 * s);
+          }
+        }
+      });
+    }
+    // cabin
+    box(U(0.44), V(0.32), U(0.8), V(0.68), Z(13), Z(26), '#f2f0ea', { lw: 0.9 });
+    const glass = () => lin(0, -Z(25), 0, -Z(18), [[0, '#c8f4ff'], [0.5, '#5ab4d8'], [1, '#2a6a90']]);
+    onR(U(0.8), V(0.68), () => {
+      X.fillStyle = glass(); X.fillRect(2.2 * s, -Z(25), 0.36 * HX * s - 4.4 * s, 7 * s);
+      line(0.18 * HX * s, -Z(25), 0.18 * HX * s, -Z(18), '#f2f0ea', 1.2 * s);
+      X.fillStyle = 'rgba(255,255,255,.55)'; X.fillRect(3 * s, -Z(24.5), 4 * s, 1.2 * s);
     });
-    box(U(0.42), V(0.34), U(0.78), V(0.66), Z(15), Z(29), '#f0eee8', {});
-    onR(U(0.78), V(0.66), () => { X.fillStyle = lin(0, -Z(28), 0, -Z(19), [[0, '#b8f0ff'], [1, '#2a6a90']]); X.fillRect(2 * s, -Z(28), 0.32 * HX * s - 4 * s, 8 * s); });
-    onL(V(0.66), U(0.42), () => { X.fillStyle = lin(0, -Z(28), 0, -Z(19), [[0, '#b8f0ff'], [1, '#2a6a90']]); X.fillRect(3 * s, -Z(28), 0.3 * HX * s, 7 * s); X.fillStyle = I.red; X.fillRect(0, -Z(17), 0.36 * HX * s, 2 * s); });
+    onL(V(0.68), U(0.44), () => {
+      for (let i = 0; i < 3; i++) { rrect((2.5 + i * 5.6) * s, -Z(24.5), 4.4 * s, 5.5 * s, 1.2 * s); fs(glass(), '#2a4a60', 0.6); }
+      X.fillStyle = I.red; X.fillRect(0, -Z(16.5), 0.36 * HX * s, 2 * s);
+    });
+    // roof: beacon + antenna
+    const rp = P(U(0.62), V(0.5), Z(26));
+    ell(rp[0], rp[1] - 1.5 * s, 3 * s, 2.2 * s); fs('#ffb020', '#6a4408', 0.7);
+    line(...P(U(0.5), V(0.4), Z(26)), P(U(0.5), V(0.4), Z(38))[0], P(U(0.5), V(0.4), Z(38))[1], '#3a3e44', 0.9 * s);
   }
+  /** Animated parts of hovercraftAt: spinning fan blades, roof beacon and air-cushion spray. */
   function hovercraftFan(u0, v0, s, z0, t) {
     const U = (u) => u0 + u * s, V = (v) => v0 + v * s, Z = (z) => z0 + z * s;
-    onR(U(0.26), V(0.5), () => {
-      const zc = -Z(28);
-      for (let i = 0; i < 3; i++) { const a = t * 14 + i * TAU / 3; X.save(); X.translate(0, zc); X.rotate(a); ell(4.2 * s, 0, 4.2 * s, 1.5 * s); fs('rgba(60,64,70,.85)'); X.restore(); }
-      ell(0, zc, 1.8 * s, 1.8 * s); fs('#c8ccd0');
+    const R = HOVER_R * s, zc = Z(13) + 4 * s + R;
+    onR(U(0.26), V(0.8), () => {
+      HOVER_FANS.forEach((fv, j) => {
+        const x = (0.8 - fv) * HX * s;
+        for (let i = 0; i < 3; i++) { const a = t * 15 * (j ? -1 : 1) + i * TAU / 3; X.save(); X.translate(x, -zc); X.rotate(a); ell(R * 0.45, 0, R * 0.45, R * 0.17); fs('rgba(70,74,80,.8)'); X.restore(); }
+        ell(x, -zc, 1.6 * s, 1.6 * s); fs('#d8dce0');
+      });
     });
+    const rp = P(U(0.62), V(0.5), Z(26)), on = Math.sin(t * 7) > 0;
+    if (on) glow(rp[0], rp[1] - 2 * s, 14 * s, '#ffb020', 0.55);
+    // spray / snow dust puffed out by the air cushion
+    for (let i = 0; i < 7; i++) {
+      const p = fract(t * 0.9 + i / 7), an = -PI / 4 + hash(i, 5) * PI;
+      const q = rrUV(U(0.5), V(0.5), (0.44 + p * 0.12) * s, (0.3 + p * 0.12) * s, (0.25 + p * 0.12) * s, an, an + 1e-3, 1)[0];
+      const pt = P(q[0], q[1], Z(1 + p * 4));
+      ell(pt[0], pt[1], (2 + p * 4) * s, (1.2 + p * 2) * s); X.fillStyle = `rgba(255,255,255,${0.55 * (1 - p)})`; X.fill();
+    }
   }
 
   def('lab_ice', {
@@ -3231,7 +3380,8 @@
       box(0.45, 0.55, 2.1, 1.55, 16, 58, I.red, { tex: both(TX.panels(12), (len, z0, z1) => { X.fillStyle = '#f4f4f0'; X.fillRect(0, -21, len, 4); }) });
       onL(1.55, 0.45, () => { for (let x = 8; x < 1.65 * HX - 10; x += 14) { if (x > 30 && x < 56) continue; X.fillStyle = '#2a3a48'; X.fillRect(x, -36, 9, 9); X.fillStyle = lin(x, -36, x + 9, -27, [[0, '#ffe8a0'], [1, '#e0a040']]); X.fillRect(x + 1, -35, 7, 7); } });
       onR(2.1, 1.55, () => { for (let x = 8; x < HX - 4; x += 14) { X.fillStyle = '#2a3a48'; X.fillRect(x, -36, 9, 9); X.fillStyle = lin(x, -36, x + 9, -27, [[0, '#c8f0ff'], [1, '#3a7aa0']]); X.fillRect(x + 1, -35, 7, 7); } });
-      signL(1.56, 0.96, 34, 30, 13, 'ADN', 'navy', 10);
+      // lab sign (the DNA helix inside it is animated)
+      onL(1.56, 0.45, () => { board(19, -47, 46, 15, '', 'navy'); txt('ADN', 26, -46.5, 10.5, '#ffe680', { shadow: '#081626' }); });
       snowTop(0.45, 0.55, 2.1, 1.55, 58, 5, 3);
       icicles(P(0.45, 1.55, 16), P(2.1, 1.55, 16), 10, 8, 2);
       // radome
@@ -3253,7 +3403,23 @@
       icicles(P(1.7, 2.45, 12), P(2.65, 2.45, 12), 6, 7, 6);
       const dp = P(2.25, 1.85, 50); box(2.2, 1.8, 2.3, 1.9, 46, 54, '#7a848c', {});
       for (const [u, v] of [[0.3, 2.6], [2.8, 2.7]]) snowPile(...P(u, v, 3), 14);
-      crate(0.5, 2.3, 3, 0.26, '#b07a44'); snowTop(0.5, 2.3, 0.76, 2.56, 11.8, 2, 1);
+      // cryogenic DNA tanks (front left) linked to the lab by a pipe
+      const pa = P(0.5, 1.98, 24), pb = P(0.62, 1.55, 24);
+      line(pa[0], pa[1], pb[0], pb[1], '#5a646c', 3.2); line(pa[0], pa[1], pb[0], pb[1], '#aab4bc', 1.6);
+      for (const [u, v, R, h] of [[0.42, 2.12, 11, 34], [1.02, 2.08, 9, 26]]) {
+        const p = P(u, v, 3);
+        blob(p[0], p[1] + 1, R + 4, (R + 4) * 0.45, 0.25);
+        cyl(p[0], p[1], R, h, '#e8eef2', {
+          top: '#f8fbfd',
+          tex: (x, y, RR, hh) => {
+            for (const z of [hh * 0.25, hh * 0.7]) { X.beginPath(); X.ellipse(x, y - z, RR, RR * 0.5, 0, 0, PI); X.strokeStyle = '#2f6aa8'; X.lineWidth = 3; X.stroke(); }
+            for (let i = 0; i < 4; i++) { ell(x - RR * 0.5 + hash(i, u * 10) * RR, y - hh * (0.35 + hash(i, v * 10) * 0.25), 1.6, 1.2); X.fillStyle = 'rgba(255,255,255,.8)'; X.fill(); }
+          },
+        });
+        ell(p[0], p[1] - h - 2, R * 0.35, R * 0.18); fs('#9aa4ac', '#4a545c', 0.8);
+        snowPile(p[0] - R * 0.2, p[1] - h - 1, R * 0.6);
+      }
+      board(...P(0.42, 2.12, 18), 18, 8, '-196°', 'ice', 5.5);
     },
     anim(b) {
       const t = b.t;
@@ -3274,7 +3440,7 @@
       // blinking light + DNA helix next to the sign
       const am = P(1.8, 0.75, 106), on = Math.sin(t * 3) > 0.3;
       ell(am[0], am[1], 2, 2); fs(on ? '#ff4a3a' : '#7a2018'); if (on) glow(am[0], am[1], 8, '#ff4a3a', 0.6);
-      onL(1.56, 0.45, () => dnaHelix(12, -44, 18, 3, t));
+      onL(1.56, 0.45, () => dnaHelix(5.5, -52.5, 11, 2.6, t));
     },
   });
 
@@ -3653,9 +3819,15 @@
       const c = P(0.5, 0.5, 0);
       blob(c[0], c[1] + 3, 34, 13, 0.32);
       ell(c[0], c[1] + 1, 36, 15); fs('#eef4f8', '#c4d6e4', 0.8);
+      // rubber track loop (rounded), extruded across v0..v1, with road wheels and grousers on the outer face
       const track = (v0, v1) => {
-        box(0.14, v0, 0.88, v1, 2, 13, '#2a2a2e', { stroke: '#000', hi: false });
-        onL(v1, 0.14, () => { for (let i = 0; i < 5; i++) { ell(5 + i * 8.5, -7.5, 3.6, 3.6); fs('#5a5e64', '#1a1a1e', 0.8); ell(5 + i * 8.5, -7.5, 1.2, 1.2); fs('#a8acb2'); } for (let x = 1; x < 35; x += 2.5) line(x, -13, x, -12, '#4a4a4a', 1); });
+        const L = 0.76 * HX;
+        extrudeL(v0, v1, 0.12, 4, k => {
+          rrect(0, -15, L, 13, 6.5); fs(k < 1 ? '#18191c' : '#2a2b30', '#050506', 1);
+          if (k < 1) return;
+          for (let x = 3; x < L - 2; x += 3) { line(x, -15, x, -13.6, '#55585e', 1.1); line(x, -2, x, -0.6, '#3a3c40', 1.1); }
+          for (let i = 0; i < 4; i++) { const x = 7 + i * (L - 14) / 3; ell(x, -8.5, 4, 4); fs(lin(x - 4, -12, x + 4, -5, [[0, '#9aa0a8'], [1, '#4a4e54']]), '#1a1a1e', 0.8); ell(x, -8.5, 1.4, 1.4); fs('#d8dce0'); }
+        });
       };
       track(0.28, 0.4);
       box(0.2, 0.36, 0.82, 0.64, 10, 22, I.red, {});
@@ -3668,6 +3840,18 @@
       const ex = P(0.3, 0.4, 22); X.fillStyle = '#4a4a4a'; X.fillRect(ex[0] - 1.2, ex[1] - 14, 2.4, 14);
       track(0.6, 0.72);
       snowTop(0.38, 0.38, 0.78, 0.62, 39.5, 2, 3);
+      // front snow blade with hazard stripes
+      for (const [a, z0] of [[0.22, 4], [0.78, 4]]) line(...P(0.86, a + (a < 0.5 ? 0.06 : -0.06), 11), ...P(0.95, a, 9), '#3a3e44', 2);
+      extrudeR(0.93, 0.97, 0.8, 2, k => {
+        X.beginPath(); X.moveTo(0, -3); X.lineTo(0.62 * HX, -3); X.quadraticCurveTo(0.62 * HX + 2, -10, 0.62 * HX - 1, -17); X.lineTo(-1, -17); X.quadraticCurveTo(2, -10, 0, -3); X.closePath();
+        fs(k < 1 ? '#a87a10' : '#f0c020', '#4a3404', 1);
+        if (k < 1) return;
+        X.save(); X.clip();
+        for (let x = -10; x < 0.62 * HX + 10; x += 7) { X.beginPath(); X.moveTo(x, -3); X.lineTo(x + 3.5, -3); X.lineTo(x - 0.5, -17); X.lineTo(x - 4, -17); X.closePath(); X.fillStyle = 'rgba(30,30,30,.85)'; X.fill(); }
+        X.restore();
+        line(0, -16.5, 0.62 * HX - 1, -16.5, 'rgba(255,255,255,.55)', 1);
+      });
+      snowPile(...P(1.0, 0.5, 2), 9);
     },
     anim(b) { const ex = P(0.3, 0.4, 36); smoke(ex[0], ex[1], b.t, { n: 4, rise: 26, col: '#9a9a9a', a: 0.35, seed: 6, r1: 5 }); },
   });
@@ -4212,9 +4396,149 @@
     }
   }
 
+  // ---------------------------------------------------------------- upgrade levels (opts.level 2..5)
+  // Generic "plot upgrades" drawn around any non-special building: L2 star plaque, L3 corner flags +
+  // ground lights, L4 tall banners + coloured bulbs, L5 everything in gold with rising sparkles.
+  const LV_FLAG = { land: ['#2f8a3e', '#ffd23a'], sea: ['#1f8ac0', '#ffffff'], ice: ['#2a6ab0', '#e8f4ff'] };
+  const BULBS = ['#ff5a4a', '#ffd23a', '#5ad06a', '#4ab0ff'];
+  const fxSprites = new Map();
+  /** Small canvases rendered once and reused every frame (glows, halos, plaques). */
+  function fxSprite(key, w, h, render) {
+    if (typeof document === 'undefined') return null;
+    let c = fxSprites.get(key);
+    if (c) return c;
+    c = document.createElement('canvas'); c.width = w; c.height = h;
+    const g = c.getContext('2d');
+    withCtx(g, () => render(g));
+    fxSprites.set(key, c);
+    return c;
+  }
+  /** Soft warm glow used for every light bulb. */
+  const bulbSprite = () => fxSprite('bulb', 32, 32, g => {
+    const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gr.addColorStop(0, 'rgba(255,244,190,.95)'); gr.addColorStop(0.3, 'rgba(255,214,110,.45)'); gr.addColorStop(1, 'rgba(255,200,80,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
+  });
+  /** Golden ring halo (unit sprite, stretched onto the ground ellipse). */
+  const haloSprite = () => fxSprite('halo', 128, 128, g => {
+    const gr = g.createRadialGradient(64, 64, 64 * 0.55, 64, 64, 64);
+    gr.addColorStop(0, 'rgba(255,200,60,0)'); gr.addColorStop(0.55, 'rgba(255,200,60,.85)'); gr.addColorStop(1, 'rgba(255,200,60,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 128, 128);
+  });
+  const PLQ = 3;                                // plaque sprite resolution (px per canonical px)
+  /** Metal (or gold) plate on two short posts showing `n` stars; sprite anchored at its ground point. */
+  function plaqueSprite(n, gold, k) {
+    const w = (8 + n * 7.5) * k + 6, h = 20 * k;
+    return fxSprite('plq' + n + (gold ? 'g' : '') + k, Math.ceil(w * PLQ), Math.ceil(h * PLQ), g => {
+      g.scale(PLQ, PLQ);
+      levelPlaque(w / 2, h - 1, n, gold, k);
+    });
+  }
+  function levelPlaque(x, y, n, gold, k) {
+    const ph = 4 * k, w = (8 + n * 7.5) * k, h = 11 * k, y1 = y - ph;
+    for (const dx of [-w * 0.3, w * 0.3]) { X.fillStyle = '#2e3338'; X.fillRect(x + dx - 1 * k, y1, 2 * k, ph); }
+    rrect(x - w / 2 - 1.5 * k, y1 - h - 1.5 * k, w + 3 * k, h + 3 * k, 3 * k); fs(gold ? '#6a4606' : '#22292e');
+    rrect(x - w / 2, y1 - h, w, h, 2 * k);
+    fs(lin(0, y1 - h, 0, y1, gold ? [[0, '#fff3b0'], [0.5, '#f0b830'], [1, '#a86e0e']] : [[0, '#b9c3c9'], [0.5, '#7d8a92'], [1, '#56616a']]));
+    for (let i = 0; i < n; i++) {
+      const sx = x + (i - (n - 1) / 2) * 7.5 * k, sy = y1 - h / 2, r = 3.3 * k, pts = [];
+      for (let j = 0; j < 10; j++) { const rr = j % 2 ? r * 0.45 : r, a = -PI / 2 + j * PI / 5; pts.push([sx + Math.cos(a) * rr, sy + Math.sin(a) * rr]); }
+      spath(pts); fs(gold ? '#fffbe0' : '#ffd23a', gold ? '#8a5a06' : '#6a4406', 0.7 * k);
+    }
+  }
+  /** Screen points of the light bulbs along the two front edges (cached per footprint). */
+  const bulbCache = new Map();
+  function bulbPoints(d) {
+    const key = d.W + 'x' + d.D;
+    if (bulbCache.has(key)) return bulbCache.get(key);
+    const pts = [], big = d.W * d.D > 1, step = big ? 0.34 : 0.5, e = 0.06;
+    for (let v = e; v <= d.D - e + 1e-6; v += step) pts.push(P(d.W - e, v, 2));
+    for (let u = d.W - e - step; u >= e - 1e-6; u -= step) pts.push(P(u, d.D - e, 2));
+    bulbCache.set(key, pts);
+    return pts;
+  }
+  function levelFx(d, b, lvl) {
+    const t = b.t, big = d.W * d.D > 1, k = big ? 1 : 0.8, gold = lvl >= 5, ga = X.globalAlpha;
+    const cols = gold ? ['#f0b830', '#c8372a'] : (LV_FLAG[b.biome] || LV_FLAG.land);
+    // L5: golden halo on the ground (drawn first so it sits under the props)
+    if (gold) {
+      const r = (d.W + d.D) * HX * 0.5, spr = haloSprite();
+      if (spr) {
+        X.save(); X.globalCompositeOperation = 'lighter'; X.globalAlpha = ga * (0.16 + 0.1 * Math.sin(t * 2.4));
+        X.drawImage(spr, b.cx - r, b.cy - r * 0.5, r * 2, r); X.restore();
+      }
+    }
+    // L3+: light bulbs along the two front edges (left corner → front corner → right corner), batched
+    if (lvl >= 3) {
+      const pts = bulbPoints(d), spr = bulbSprite(), nc = lvl >= 4 ? 4 : 1;
+      X.beginPath();
+      for (const p of pts) { X.moveTo(p[0], p[1]); X.lineTo(p[0], p[1] - 3); }
+      X.strokeStyle = '#3a3f44'; X.lineWidth = 1.2; X.stroke();
+      if (spr) {
+        X.save(); X.globalCompositeOperation = 'lighter';
+        for (let grp = 0; grp < 2; grp++) {
+          X.globalAlpha = ga * (0.5 + 0.4 * Math.sin(t * 3 + grp * PI));
+          for (let i = grp; i < pts.length; i += 2) X.drawImage(spr, pts[i][0] - 12, pts[i][1] - 16, 24, 24);
+        }
+        X.restore();
+      }
+      for (let c = 0; c < nc; c++) {
+        X.beginPath();
+        for (let i = c; i < pts.length; i += nc) { const p = pts[i]; X.moveTo(p[0] + 2.4, p[1] - 4); X.arc(p[0], p[1] - 4, 2.4, 0, TAU); }
+        fs(nc > 1 ? BULBS[c] : '#ffe27a', 'rgba(0,0,0,.5)', 0.6);
+      }
+      X.beginPath();
+      for (const p of pts) { X.moveTo(p[0] + 0.1, p[1] - 4.8); X.arc(p[0] - 0.8, p[1] - 4.8, 0.9, 0, TAU); }
+      X.fillStyle = 'rgba(255,255,255,.95)'; X.fill();
+    }
+    // L3+: flag poles at the left and right corners (L4+: tall banners)
+    if (lvl >= 3 && big) {
+      const hgt = lvl >= 4 ? 58 : 44;
+      [[0.1, d.D - 0.1, -1], [d.W - 0.1, 0.1, 1]].forEach(([u, v, dir], i) => {
+        const p = P(u, v, 0);
+        ell(p[0], p[1], 5, 2.2); X.fillStyle = 'rgba(0,0,0,.22)'; X.fill();
+        pole(p[0], p[1], hgt, gold ? '#d8a020' : '#9aa4ac', 2.2);
+        if (lvl >= 4) {
+          // vertical banner hanging from a short arm
+          const bx = p[0] + dir * 2, by = p[1] - hgt + 3, wv = Math.sin(t * 3 + i) * 1.5, bw = 11, bh = 24;
+          line(p[0], by, p[0] + dir * (bw + 3), by, gold ? '#d8a020' : '#6a747c', 1.6);
+          spath([[bx, by], [bx + dir * bw, by], [bx + dir * bw + wv, by + bh], [bx + dir * bw / 2 + wv, by + bh - 5], [bx + wv, by + bh]]);
+          fs(shade(cols[0], -0.05), ink(cols[0]), 0.8);
+          line(bx + dir * 1.5, by + 3, bx + dir * (bw - 1.5), by + 3, cols[1], 1.4);
+          const sx = bx + dir * bw / 2 + wv * 0.5, sy = by + 11, pts = [];
+          for (let j = 0; j < 10; j++) { const rr = j % 2 ? 1.6 : 3.6, a = -PI / 2 + j * PI / 5; pts.push([sx + Math.cos(a) * rr, sy + Math.sin(a) * rr]); }
+          spath(pts); fs(cols[1]);
+        } else cloth(p[0] + dir, p[1] - hgt + 1, 15, 10, t, cols[0], cols[1], i * 1.7, dir);
+      });
+    }
+    // L2+: star plaque at the front corner (pre-rendered sprite)
+    const f = P(d.W, d.D, 0), spr = plaqueSprite(lvl, gold, k);
+    if (spr) X.drawImage(spr, f[0] - spr.width / PLQ / 2, f[1] + 8 - spr.height / PLQ, spr.width / PLQ, spr.height / PLQ);
+    else levelPlaque(f[0], f[1] + 7, lvl, gold, k);
+    // L5: sparkles rising around the building
+    if (gold) {
+      const r = (d.W + d.D) * HX * 0.36, top = Math.min(d.H, 100);
+      for (let i = 0; i < 6; i++) {
+        const p = fract(t * 0.35 + i / 6), a = i * 2.1 + t * 0.3;
+        sparkle(b.cx + Math.cos(a) * r, b.cy - 4 - p * top + Math.sin(a) * r * 0.3, 2 + 2.5 * Math.sin(p * PI), Math.sin(p * PI), i % 2 ? '#ffe680' : '#ffffff');
+      }
+    }
+  }
+  /** Level visuals apply to buyable buildings only (not to specials, roads or the fallback art). */
+  function levelOf(artId, d, opts) {
+    const lvl = Math.min(5, Math.floor(+opts.level || 1));
+    if (lvl < 2 || d.id === 'road' || d.id[0] === '_' || /^road_/.test(d.id)) return 0;
+    const def = PC.DATA && PC.DATA.BUILDINGS && PC.DATA.BUILDINGS[artId];
+    if (def && (def.kind === 'special' || def.kind === 'road')) return 0;
+    return lvl;
+  }
+
   /**
    * Draw building art `artId` standing on footprint diamond fp (ctx coordinates, camera applied).
-   * opts: { alpha, ghost, ready, producing (0..1), biome }
+   * opts: { alpha, ghost, ready, producing (0..1), biome, level (1..5) }
+   * - ghost: placement preview → translucent (alpha 0.7 unless `alpha` is given), no "ready" sparkle.
+   * - ready: golden glow + sparkles (production finished); producing drives growth visuals of farms.
+   * - level ≥ 2: upgrade decorations (plaque with stars, flags, lights, gold at level 5).
    */
   BA.draw = function (ctx, artId, fp, t, opts) {
     if (!ctx || !fp || !fp.top || !fp.bottom || !fp.left || !fp.right) return;
@@ -4225,9 +4549,11 @@
     if (!(s > 0.005)) return;
     hookFonts();
     const b = makeB(d, t, opts);
+    const ghost = !!opts.ghost, lvl = levelOf(artId, d, opts);
     const mx = (fp.top[0] + fp.bottom[0]) / 2, my = (fp.top[1] + fp.bottom[1]) / 2;
     ctx.save();
     if (opts.alpha != null) ctx.globalAlpha *= clamp(+opts.alpha, 0, 1);
+    else if (ghost) ctx.globalAlpha *= 0.7;
     ctx.translate(mx, my);
     ctx.scale(s, s);
     ctx.translate(-b.cx, -b.cy);
@@ -4240,7 +4566,8 @@
           X.restore();
         } else drawStatic(ctx, d, b);
         if (d.anim) d.anim(b);
-        if (b.ready) readyFx(b, d);
+        if (lvl) levelFx(d, b, lvl);
+        if (b.ready && !ghost) readyFx(b, d);
       } catch (e) {
         if (!BA._warned) { BA._warned = true; console.warn('BUILD_ART', artId, e); }
       }

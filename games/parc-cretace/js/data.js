@@ -566,4 +566,72 @@
       { weight: 1, reward: { coins: 15000, dollars: 10 }, label: 'Jackpot ! 15 000 pièces + 10 dollars', rarity: 'legendaire' },
     ],
   };
+
+  // ---------------------------------------------------------------------------
+  // Building upgrades (SPEC §11.11): levels 1–5 for coin and food buildings.
+  // Upgrade from level L costs cost.coins × costMult^L; production × prodMult^(level − 1).
+  // ---------------------------------------------------------------------------
+  DATA.UPGRADE = { maxLevel: 5, costMult: 1.5, prodMult: 1.5, kinds: ['coins', 'food'] };
+
+  // ---------------------------------------------------------------------------
+  // Tournament medals (SPEC §11.4): tier 1 Bronze / 2 Argent / 3 Or.
+  // Argent = enemies +5 levels and one extra enemy (max 3); Or = +10 levels and a full team of 3.
+  // First win of a tier gives stage reward × rewardMult; replays give replayCoins of the coins; a loss gives lossXp.
+  // ---------------------------------------------------------------------------
+  DATA.MEDALS = {
+    names: ['Bronze', 'Argent', 'Or'],
+    colors: ['#c8823c', '#c9d2da', '#f4c430'],
+    levelBonus: [0, 5, 10],
+    rewardMult: [1, 1.5, 2.2],
+    replayCoins: 0.3,
+    lossXp: 5,
+  };
+
+  // ---------------------------------------------------------------------------
+  // Limited offers (SPEC §11.10): one species at a time, rotating every rotateSec, among species of
+  // rarity ≥ minRarity and the `offerOnly` ones (dollar price), from unlocked parks, not yet created.
+  // An offered species needs no DNA research and no player level; coin prices get `discount`.
+  // ---------------------------------------------------------------------------
+  DATA.OFFERS = { rotateSec: 86400, minRarity: 'super', discount: 0.2, maxLevelAhead: 6 };
+
+  // ---------------------------------------------------------------------------
+  // Side missions (« Missions secondaires », SPEC §11.3): `count` active at once, each generated
+  // from a template scaled to the player level L, regenerated when claimed.
+  //   n: [base, perLevel, max] → target = clamp(round(base + perLevel × (L − 1)), 1, max), rounded to `round`
+  //   reward: { res: [base, perLevel] } → round(base + perLevel × (L − 1)) (coins rounded to a nice value)
+  //   text: [singular, plural] with {n} (and {food} = food name of the chosen park)
+  //   goal: a mission goal (SPEC §4) plus the engine extras activate / upgrade / cards / expedition;
+  //         res 'food' = food of the park where the player has a farm.
+  //   icon: PC.ICONS name ('food' = that park's food icon). needs: condition checked before offering it.
+  // ---------------------------------------------------------------------------
+  const SM = (id, icon, npc, title, text, goal, n, reward, extra) => Object.assign({ id, icon, npc, title, text, goal, n, reward }, extra || {});
+  DATA.SIDE_MISSIONS = {
+    count: 3,
+    templates: [
+      SM('feed', 'food', 'tom', 'Petits creux', ['Nourris une créature.', 'Nourris tes créatures {n} fois.'],
+        { type: 'feed' }, [3, 0.5, 25], { xp: [15, 4], coins: [150, 60] }, { needs: 'creature' }),
+      SM('coins', 'coin', 'tom', 'La tirelire du parc', ['Ramasse {n} pièce.', 'Ramasse {n} pièces.'],
+        { type: 'collect', res: 'coins' }, [200, 150, 30000], { xp: [15, 4], dollars: [1, 0.1] }, { round: 50 }),
+      SM('food', 'food', 'elise', 'Le garde-manger', ['Récolte {n} {food}.', 'Récolte {n} {food}.'],
+        { type: 'collect', res: 'food' }, [100, 90, 20000], { xp: [15, 4], coins: [200, 80] }, { round: 50, needs: 'farm' }),
+      SM('activate', 'clock', 'tom', 'Livraisons express', ['Active une livraison de nourriture.', 'Active {n} livraisons de nourriture.'],
+        { type: 'activate' }, [2, 0.15, 6], { xp: [15, 4], coins: [150, 60] }, { needs: 'farm' }),
+      SM('hatch', 'egg', 'elise', 'Une nouvelle naissance', ['Fais éclore une créature.', 'Fais éclore {n} créatures.'],
+        { type: 'hatch' }, [1, 0, 1], { xp: [30, 6], coins: [300, 100] }, { needs: 'hatch' }),
+      SM('deco', 'star', 'tom', 'Jardinier en chef', ['Place une décoration.', 'Place {n} décorations.'],
+        { type: 'build', kind: 'deco' }, [2, 0.15, 6], { xp: [15, 4], coins: [120, 50] }),
+      SM('roads', 'check', 'tom', 'Des allées toutes neuves', ['Construis un morceau de route.', 'Construis {n} morceaux de route.'],
+        { type: 'build', kind: 'road' }, [4, 0.3, 12], { xp: [10, 3], coins: [100, 40] }),
+      SM('battle', 'trophy', 'marco', 'Entraînement au tournoi', ['Gagne un combat au tournoi.', 'Gagne {n} combats au tournoi.'],
+        { type: 'win_battle' }, [1, 0.08, 3], { xp: [30, 6], dollars: [2, 0.15] }, { minLevel: 2, needs: 'battle' }),
+      SM('research', 'dna', 'elise', 'Séquençage express', ['Lance une tentative de recherche ADN.', 'Lance {n} tentatives de recherche ADN.'],
+        { type: 'research', success: false }, [1, 0.05, 3], { xp: [25, 5], coins: [300, 100] }, { minLevel: 3, needs: 'research' }),
+      SM('upgrade', 'star', 'marco', 'Travaux d’amélioration', ['Améliore un bâtiment.', 'Améliore {n} bâtiments.'],
+        { type: 'upgrade' }, [1, 0, 1], { xp: [30, 6], dollars: [2, 0.1] }, { minLevel: 4, needs: 'upgrade' }),
+      SM('cards', 'star', 'tom', 'Le collectionneur', ['Ouvre un paquet de cartes.', 'Ouvre {n} paquets de cartes.'],
+        { type: 'cards' }, [1, 0, 1], { xp: [10, 3], coins: [100, 40] }, { weight: 0.6 }),
+      SM('expedition', 'dna', 'oleg', 'Chasseur d’ambre', ['Envoie une expédition ADN.', 'Envoie {n} expéditions ADN.'],
+        { type: 'expedition' }, [1, 0, 1], { xp: [30, 6], dollars: [2, 0.1] }, { minLevel: 4, needs: 'expedition', weight: 0.7 }),
+    ],
+  };
 })(window.PC = window.PC || {});
