@@ -1,0 +1,1281 @@
+<title>Parc Crétacé</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bungee&family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@500;600;700&display=swap">
+<style>
+/* Layout: HUD bar on top, the island map on the left with goals + log under it, the control panel (tools, inspection) on the right; stacks to one column on phones */
+:root {
+  color-scheme: dark;
+  --bg: #12201a;
+  --panel: #1a2b22;
+  --panel-2: #213529;
+  --line: #2e4637;
+  --fg: #efe7d2;
+  --muted: #9db09f;
+  --accent: #f0a33a;
+  --accent-ink: #2a1a05;
+  --danger: #e5583f;
+  --ok: #86c77f;
+  --display: 'Bungee', 'Arial Black', Impact, sans-serif;
+  --body: 'Barlow', 'Segoe UI', system-ui, sans-serif;
+  --label: 'Barlow Condensed', 'Arial Narrow', 'Segoe UI', sans-serif;
+}
+html, body { background: var(--bg); color: var(--fg); }
+body { font-family: var(--body); font-size: 15px; line-height: 1.4; padding-block: 12px 28px; padding-inline: 16px; }
+button { font: inherit; color: inherit; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.app { max-width: 1320px; margin: 0 auto; display: grid; grid-template-columns: minmax(0, 1fr) 320px; gap: 14px; }
+@media (max-width: 920px) {
+  .app { grid-template-columns: minmax(0, 1fr); }
+  .stage { display: contents; }
+  .mapwrap { order: 1; } .hint { order: 2; } .panel { order: 3; } .below { order: 4; }
+}
+
+.hud { grid-column: 1 / -1; display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; padding: 10px 14px; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; }
+.brand { display: flex; flex-direction: column; min-width: 0; }
+.logo { font-family: var(--display); font-size: 22px; letter-spacing: .02em; color: var(--accent); line-height: 1.1; }
+.sub { font-family: var(--label); font-size: 13px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; }
+.stats { display: flex; flex-wrap: wrap; gap: 8px 22px; flex: 1; }
+.stat { display: flex; flex-direction: column; min-width: 0; }
+.stat .k { font-family: var(--label); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.stat .v { font-weight: 700; font-size: 18px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.stat .v.neg { color: var(--danger); }
+.stars { position: relative; display: inline-block; letter-spacing: 2px; }
+.stars .s-bg { color: var(--line); }
+.stars .s-fg { position: absolute; left: 0; top: 0; overflow: hidden; color: var(--accent); white-space: nowrap; width: 0; }
+.speed { display: flex; gap: 4px; }
+.speed button { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; font-family: var(--label); font-weight: 600; letter-spacing: .04em; cursor: pointer; min-width: 44px; }
+.speed button[aria-pressed="true"] { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+
+.stage { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.mapwrap { border-radius: 8px; overflow: hidden; border: 1px solid var(--line); background: #2c6f8c; }
+#map { display: block; width: 100%; height: auto; aspect-ratio: 30 / 20; cursor: crosshair; }
+.hint { margin: 0; min-height: 1.4em; color: var(--muted); font-size: 14px; }
+.hint.err { color: var(--danger); font-weight: 600; }
+.below { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; }
+@media (max-width: 640px) { .below { grid-template-columns: minmax(0, 1fr); } }
+
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; min-width: 0; }
+.card h2 { margin: 0 0 10px; font-family: var(--label); font-weight: 700; font-size: 13px; letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.panel { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+
+.tools { display: grid; grid-template-columns: repeat(auto-fill, minmax(132px, 1fr)); gap: 6px; }
+.tool { display: grid; grid-template-columns: 36px minmax(0, 1fr); grid-template-rows: auto auto; column-gap: 8px; align-items: center; text-align: left; padding: 6px 8px; background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; cursor: pointer; }
+.tool canvas { grid-row: 1 / 3; width: 36px; height: 36px; }
+.tool .tn { font-weight: 600; font-size: 13px; line-height: 1.15; }
+.tool .tp { font-family: var(--label); font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.tool:hover { border-color: var(--muted); }
+.tool[aria-pressed="true"] { border-color: var(--accent); background: #3a3320; box-shadow: inset 0 0 0 1px var(--accent); }
+.tool[aria-pressed="true"] .tp { color: var(--accent); }
+.tool.poor .tp { color: var(--danger); }
+
+#inspect { font-size: 14px; }
+.ins-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; font-weight: 700; font-size: 17px; }
+.ins-sub { color: var(--muted); margin-bottom: 8px; }
+.pill { font-family: var(--label); font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 2px 8px; border-radius: 99px; background: var(--panel-2); color: var(--muted); }
+.pill.ok { background: #263f2b; color: var(--ok); }
+.pill.warn { background: #45361a; color: var(--accent); }
+.pill.bad { background: #4a2219; color: var(--danger); }
+.bar { display: grid; grid-template-columns: 52px minmax(0, 1fr) 36px; align-items: center; gap: 8px; margin: 4px 0; font-size: 13px; }
+.bar .track { height: 8px; border-radius: 4px; background: var(--panel-2); overflow: hidden; }
+.bar .track i { display: block; height: 100%; width: 0; background: var(--ok); }
+.bar .track i.hi { background: var(--danger); }
+.bar .num { text-align: right; font-variant-numeric: tabular-nums; color: var(--muted); }
+dl.kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 4px 12px; margin: 10px 0 0; }
+dl.kv dt { color: var(--muted); }
+dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+dd.bad { color: var(--danger); }
+.row { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 12px; }
+.btn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-weight: 600; font-size: 13px; }
+.btn:hover { border-color: var(--muted); }
+.btn.danger { border-color: var(--danger); color: var(--danger); }
+
+#goals { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+#goals li { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; gap: 8px; align-items: baseline; }
+#goals .box { width: 14px; height: 14px; border: 2px solid var(--line); border-radius: 3px; align-self: center; }
+#goals li.done .box { background: var(--ok); border-color: var(--ok); }
+#goals li.done .gt { color: var(--muted); text-decoration: line-through; }
+#goals .gp { font-family: var(--label); color: var(--muted); font-variant-numeric: tabular-nums; }
+
+#log { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 4px; font-size: 13px; }
+#log li { display: grid; grid-template-columns: 34px minmax(0, 1fr); gap: 6px; }
+#log .d { font-family: var(--label); color: var(--muted); }
+#log li.bad .m { color: var(--danger); }
+#log li.good .m { color: var(--ok); }
+
+.foot { display: flex; justify-content: flex-end; }
+@media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+
+<div class="app">
+  <header class="hud">
+    <div class="brand"><span class="logo">Parc Crétacé</span><span class="sub">Île Crétacée · votre parc de dinosaures</span></div>
+    <div class="stats">
+      <div class="stat"><span class="k">Caisse</span><span class="v" id="sMoney">0 $</span></div>
+      <div class="stat"><span class="k">Visiteurs</span><span class="v" id="sVis">0</span></div>
+      <div class="stat"><span class="k">Note du parc</span><span class="v stars" aria-label="Note" id="sStars"><span class="s-bg">★★★★★</span><span class="s-fg" id="sStarsFg">★★★★★</span></span></div>
+      <div class="stat"><span class="k">Jour</span><span class="v" id="sDay">1 · 07:00</span></div>
+    </div>
+    <div class="speed" role="group" aria-label="Vitesse du jeu">
+      <button type="button" data-speed="0" id="sp0">Pause</button>
+      <button type="button" data-speed="1" id="sp1">1×</button>
+      <button type="button" data-speed="2" id="sp2">2×</button>
+      <button type="button" data-speed="4" id="sp4">4×</button>
+    </div>
+  </header>
+
+  <main class="stage">
+    <div class="mapwrap"><canvas id="map" aria-label="Carte du parc"></canvas></div>
+    <p class="hint" id="hint"></p>
+    <div class="below">
+      <section class="card"><h2>Objectifs</h2><ul id="goals"></ul></section>
+      <section class="card"><h2>Journal du parc</h2><ol id="log"></ol></section>
+    </div>
+  </main>
+
+  <aside class="panel">
+    <section class="card"><h2>Construire</h2><div class="tools" id="tBuild"></div></section>
+    <section class="card"><h2>Incubateur</h2><div class="tools" id="tDino"></div></section>
+    <section class="card"><h2>Outils</h2><div class="tools" id="tUtil"></div></section>
+    <section class="card"><h2>Inspection</h2><div id="inspect"></div></section>
+    <div class="foot"><button type="button" class="btn" id="newGame">Nouvelle partie</button></div>
+  </aside>
+</div>
+
+<script>
+(() => {
+'use strict';
+
+// ---------- Constants ----------
+const W = 30, H = 20, TS = 32, DAY = 30, FEE = 30, INF = 9999, SAVE_KEY = 'parc-cretace-v1';
+const T = { WATER: 0, GRASS: 1, SAND: 2, TREE: 3, PATH: 4, FENCE: 5, BROKEN: 6, GATE: 7, FEED_H: 8, FEED_C: 9, SHOP: 10, RANGER: 11 };
+const DINO_OK = t => t === T.GRASS || t === T.SAND || t === T.TREE || t === T.PATH || t === T.BROKEN || t === T.GATE;
+const FREE = t => t === T.GRASS || t === T.SAND || t === T.TREE;
+const WALK_V = t => t === T.PATH || t === T.GATE;
+const BUILD_COST = { [T.FEED_H]: 300, [T.FEED_C]: 400, [T.SHOP]: 800, [T.RANGER]: 1200 };
+const UPKEEP = { [T.FEED_H]: 20, [T.FEED_C]: 30, [T.SHOP]: 40, [T.RANGER]: 100 };
+const D4 = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+const D8 = [[0, -1], [1, 0], [0, 1], [-1, 0], [1, -1], [1, 1], [-1, 1], [-1, -1]];
+
+const SPECIES = {
+  stego:   { name: 'Stégosaure',   price: 2500,  upkeep: 60,  appeal: 3, diet: 'h', speed: .6,  space: 8,  brk: .004, scale: .85,
+             color: '#7f9147', belly: '#c8c27c', accent: '#c8603a',
+             b: { len: .92, h: .42, leg: .2, legW: .12, tail: .5, tailDrop: .02, hx: .1, hy: .16, hrx: .1, hry: .075, neckW: .13, tilt: .08 } },
+  trike:   { name: 'Tricératops',  price: 3500,  upkeep: 80,  appeal: 4, diet: 'h', speed: .7,  space: 10, brk: .01, scale: .85,
+             color: '#a8693c', belly: '#dbb487', accent: '#d9a066',
+             b: { len: .95, h: .46, leg: .2, legW: .13, tail: .38, tailDrop: .05, hx: .2, hy: .02, hrx: .17, hry: .12, neckW: .2, tilt: 0 } },
+  brachio: { name: 'Brachiosaure', price: 6000,  upkeep: 150, appeal: 6, diet: 'h', speed: .45, space: 16, brk: .004, scale: 1,
+             color: '#6c8a8e', belly: '#aac3bf', accent: '#56717a',
+             b: { len: 1.0, h: .46, leg: .36, legW: .14, tail: .55, tailDrop: .12, hx: .38, hy: -.95, hrx: .12, hry: .07, neckW: .15, tilt: -.12 } },
+  raptor:  { name: 'Vélociraptor', price: 5000,  upkeep: 120, appeal: 5, diet: 'c', speed: 1.5, space: 8,  brk: .05, scale: .8,
+             color: '#a07c48', belly: '#dfc79a', accent: '#4f3a22', prey: ['stego', 'trike'],
+             b: { len: .5, h: .22, leg: .26, legW: .07, biped: true, tail: .5, tailDrop: -.04, hx: .12, hy: -.14, hrx: .11, hry: .065, neckW: .08, tilt: -.1 } },
+  rex:     { name: 'Tyrannosaure', price: 10000, upkeep: 250, appeal: 9, diet: 'c', speed: 1.0, space: 14, brk: .035, scale: 1,
+             color: '#6e5b45', belly: '#ad987a', accent: '#3d3024', prey: ['stego', 'trike', 'brachio', 'raptor'],
+             b: { len: .95, h: .44, leg: .38, legW: .15, biped: true, tail: .65, tailDrop: -.05, hx: .16, hy: -.24, hrx: .25, hry: .15, neckW: .24, tilt: -.12 } },
+};
+for (const s of Object.values(SPECIES)) s.dark = shade(s.color, -32);
+
+const NAMES = ['Bouboule', 'Pépite', 'Caramel', 'Noisette', 'Rocky', 'Mimi', 'Gaston', 'Biscotte', 'Zéphyr', 'Croquette', 'Titan',
+  'Olga', 'Patate', 'Choupette', 'Bambou', 'Hector', 'Praline', 'Kiwi', 'Brutus', 'Cannelle', 'Gribouille', 'Nougat', 'Volcan', 'Plume'];
+const VCOL = ['#e5583f', '#f0a33a', '#4fa3d1', '#e9e2cf', '#b57bd6', '#5fbf8f', '#f27fa6', '#3d6fb8'];
+const SKIN = ['#f1c9a5', '#d9a27a', '#9c6b47', '#6e4a32'];
+const GRASS_C = ['#5c8e3d', '#598a3a', '#61923f'];
+const SAND_C = ['#d9c893', '#d4c28c', '#dccd99'];
+
+const TOOLS = [
+  { id: 'path',    g: 'tBuild', name: 'Allée', cost: 10, paint: true,
+    desc: 'Cliquez-glissez pour tracer des allées. Les visiteurs entrent par le portail et ne marchent que sur les allées.' },
+  { id: 'fence',   g: 'tBuild', name: 'Clôture électrique', cost: 25, paint: true,
+    desc: 'Cliquez-glissez pour fermer un enclos. Si l’enclos d’un dino touche une allée, il est en liberté !' },
+  { id: 'feed_h',  g: 'tBuild', name: 'Mangeoire végétale', cost: 300, tile: T.FEED_H,
+    desc: 'Nourrit les herbivores qui peuvent l’atteindre. Placez-la dans l’enclos.' },
+  { id: 'feed_c',  g: 'tBuild', name: 'Mangeoire à viande', cost: 400, tile: T.FEED_C,
+    desc: 'Nourrit les carnivores. Sans viande, ils chassent les autres dinos de leur enclos.' },
+  { id: 'shop',    g: 'tBuild', name: 'Boutique', cost: 800, tile: T.SHOP,
+    desc: 'Les visiteurs qui passent à côté achètent souvenirs et glaces. Placez-la au bord d’une allée.' },
+  { id: 'ranger',  g: 'tBuild', name: 'Poste de rangers', cost: 1200, tile: T.RANGER,
+    desc: 'Les rangers réparent les clôtures cassées à 7 cases autour et calment les dinos proches.' },
+  { id: 'tree',    g: 'tBuild', name: 'Fougère géante', cost: 30, paint: true,
+    desc: 'Décoration. Les dinosaures peuvent passer dessous.' },
+  { id: 'select',  g: 'tUtil', name: 'Inspecter', cost: 0,
+    desc: 'Cliquez sur un dinosaure ou un bâtiment pour voir ses infos.' },
+  { id: 'move',    g: 'tUtil', name: 'Hélico de transfert', cost: 150,
+    desc: 'Cliquez sur un dino, puis sur sa nouvelle place. Idéal pour rattraper un évadé.' },
+  { id: 'bulldoze', g: 'tUtil', name: 'Démolir', cost: 5, paint: true,
+    desc: 'Supprime une construction. Les bâtiments sont remboursés à moitié.' },
+];
+for (const [k, s] of Object.entries(SPECIES)) {
+  TOOLS.push({ id: 'dino:' + k, g: 'tDino', name: s.name, cost: s.price, sp: k,
+    desc: `${s.name} : ${s.diet === 'h' ? 'herbivore' : 'carnivore'}, attrait ${s.appeal}, a besoin de ${s.space} cases d’enclos, coûte ${s.upkeep} $ par jour.` });
+}
+const TOOL = Object.fromEntries(TOOLS.map(t => [t.id, t]));
+
+const TILE_INFO = {
+  [T.FEED_H]: ['Mangeoire végétale', 'Nourrit les herbivores qui peuvent l’atteindre.'],
+  [T.FEED_C]: ['Mangeoire à viande', 'Nourrit les carnivores qui peuvent l’atteindre.'],
+  [T.SHOP]:   ['Boutique', 'Les visiteurs qui passent à côté achètent souvenirs et glaces (8 $).'],
+  [T.RANGER]: ['Poste de rangers', 'Répare les clôtures cassées à 7 cases et calme les dinos proches.'],
+  [T.GATE]:   ['Entrée du parc', `Chaque visiteur paie ${FEE} $ en entrant.`],
+  [T.BROKEN]: ['Clôture cassée', 'Réparez-la avec l’outil Clôture, ou laissez faire un poste de rangers.'],
+  [T.FENCE]:  ['Clôture électrique', 'Les dinosaures ne peuvent pas la traverser… sauf s’ils la cassent.'],
+  [T.PATH]:   ['Allée', 'Les visiteurs se promènent ici.'],
+};
+
+const GOALS = [
+  { id: 'v50', t: 'Accueillir 50 visiteurs', p: () => [S.totalVisitors, 50] },
+  { id: 'sp3', t: 'Montrer 3 espèces aux visiteurs', p: () => [visibleSpecies, 3] },
+  { id: 'st3', t: 'Atteindre 3 étoiles', p: () => [stars, 3] },
+  { id: 'rex', t: 'Exposer un Tyrannosaure sans évasion', p: () => [S.dinos.some(d => d.sp === 'rex' && !escaped(d) && nearPath[idx(d.tx, d.ty)]) ? 1 : 0, 1] },
+  { id: 'm50', t: 'Avoir 50 000 $ en caisse', p: () => [S.money, 50000] },
+];
+
+// ---------- Helpers ----------
+function shade(hex, a) {
+  const n = parseInt(hex.slice(1), 16);
+  const c = v => Math.max(0, Math.min(255, v + a));
+  return '#' + ((c(n >> 16) << 16) | (c((n >> 8) & 255) << 8) | c(n & 255)).toString(16).padStart(6, '0');
+}
+function hash(x, y, s = 0) {
+  let h = (x * 374761393 + y * 668265263 + s * 1442695041) | 0;
+  h = Math.imul(h ^ (h >>> 13), 1274126177);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+function rng(seed) {
+  return () => { seed |= 0; seed = seed + 0x6D2B79F5 | 0; let t = Math.imul(seed ^ seed >>> 15, 1 | seed);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; };
+}
+const pick = a => a[Math.floor(Math.random() * a.length)];
+const idx = (x, y) => y * W + x;
+const inb = (x, y) => x >= 0 && y >= 0 && x < W && y < H;
+const get = (x, y) => inb(x, y) ? S.map[idx(x, y)] : T.WATER;
+const fmt = n => Math.round(n).toLocaleString('fr-FR') + ' $';
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+
+// ---------- State ----------
+let S = null;               // saved game state
+let V = [], F = [];         // visitors, floating texts (not saved)
+let region, regions = [], distH, distC, exitDist, nearPath, shops = [], rangers = [], gate = -1;
+let staticDirty = true, stars = 0, visibleSpecies = 0;
+let tool = 'select', selected = null, moving = null, hover = null, speed = 1;
+let secAcc = 0, spawnAcc = 0, rangerAcc = 0, lastPanicLog = -99, sellArmed = false;
+
+// ---------- Map generation ----------
+function genMap(seed) {
+  const r = rng(seed), m = new Uint8Array(W * H);
+  const GX = 8, GY = 6, grid = Array.from({ length: GX * GY }, r);
+  const noise = (x, y) => {
+    const fx = x / W * (GX - 1), fy = y / H * (GY - 1), ix = Math.floor(fx), iy = Math.floor(fy), tx = fx - ix, ty = fy - iy;
+    const g = (a, b) => grid[Math.min(GY - 1, b) * GX + Math.min(GX - 1, a)];
+    return (g(ix, iy) * (1 - tx) + g(ix + 1, iy) * tx) * (1 - ty) + (g(ix, iy + 1) * (1 - tx) + g(ix + 1, iy + 1) * tx) * ty;
+  };
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const nx = (x + .5 - W / 2) / (W / 2 - 1.2), ny = (y + .5 - H / 2) / (H / 2 - 1);
+    const d = Math.hypot(nx, ny) + (noise(x, y) - .5) * .4;
+    m[idx(x, y)] = d < 1 && x > 0 && y > 0 && x < W - 1 && y < H - 1 ? T.GRASS : T.WATER;
+  }
+  for (let y = 4; y <= 17; y++) for (let x = 5; x <= 24; x++) m[idx(x, y)] = T.GRASS;
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+    const i = idx(x, y);
+    if (m[i] !== T.GRASS) continue;
+    if (D8.some(([dx, dy]) => !inb(x + dx, y + dy) || m[idx(x + dx, y + dy)] === T.WATER)) m[i] = T.SAND;
+    else if (r() < .11 && !(x >= 8 && x <= 23 && y >= 12)) m[i] = T.TREE;
+  }
+  // Starting park: entrance, paths, one paddock, a shop
+  m[idx(15, 18)] = T.GATE; m[idx(15, 19)] = T.WATER;
+  for (let y = 13; y <= 17; y++) m[idx(15, y)] = T.PATH;
+  for (let x = 8; x <= 22; x++) m[idx(x, 13)] = T.PATH;
+  for (let y = 8; y <= 12; y++) m[idx(22, y)] = T.PATH;
+  for (let y = 6; y <= 12; y++) for (let x = 8; x <= 14; x++) {
+    const edge = x === 8 || x === 14 || y === 6 || y === 12;
+    if (edge) m[idx(x, y)] = T.FENCE; else if (m[idx(x, y)] !== T.TREE) m[idx(x, y)] = T.GRASS;
+  }
+  m[idx(11, 7)] = T.FEED_H;
+  m[idx(10, 10)] = T.GRASS; m[idx(12, 9)] = T.GRASS;
+  m[idx(16, 14)] = T.SHOP;
+  return m;
+}
+
+function newGame() {
+  const seed = (Math.random() * 1e9) | 0;
+  S = { v: 1, seed, map: genMap(seed), dinos: [], money: 20000, day: 1, time: DAY * .03, totalVisitors: 0,
+    todayIn: 0, todayOut: 0, todayVisitors: 0, incidentsToday: 0, yesterday: null, log: [], goals: {}, nextId: 1 };
+  V = []; F = []; selected = null; moving = null;
+  rebuild();
+  addDino('stego', 10, 10); addDino('stego', 12, 9);
+  logMsg('Bienvenue au Parc Crétacé ! Deux Stégosaures vous attendent déjà.', 'good');
+  logMsg('Astuce : construisez un 2e enclos et incubez un Tricératops pour attirer plus de monde.', 'info');
+}
+
+// ---------- Derived map data ----------
+function adjType(i, t) {
+  const x = i % W, y = (i / W) | 0;
+  return D4.some(([dx, dy]) => get(x + dx, y + dy) === t);
+}
+function field(isSrc, pass) {
+  const d = new Int16Array(W * H).fill(INF), q = new Int32Array(W * H);
+  let h = 0, t = 0;
+  for (let i = 0; i < W * H; i++) if (pass(S.map[i]) && isSrc(i)) { d[i] = 0; q[t++] = i; }
+  while (h < t) {
+    const j = q[h++], x = j % W, y = (j / W) | 0;
+    for (const [dx, dy] of D4) {
+      const nx = x + dx, ny = y + dy;
+      if (!inb(nx, ny)) continue;
+      const k = idx(nx, ny);
+      if (d[k] === INF && pass(S.map[k])) { d[k] = d[j] + 1; q[t++] = k; }
+    }
+  }
+  return d;
+}
+function rebuild() {
+  const m = S.map, q = new Int32Array(W * H);
+  region = new Int16Array(W * H).fill(-1); regions = [];
+  for (let i = 0; i < W * H; i++) {
+    if (region[i] >= 0 || !DINO_OK(m[i])) continue;
+    const id = regions.length, info = { size: 0, hasPath: false, feedH: false, feedC: false, load: 0 };
+    let h = 0, t = 0; q[t++] = i; region[i] = id;
+    while (h < t) {
+      const j = q[h++], x = j % W, y = (j / W) | 0;
+      info.size++;
+      if (WALK_V(m[j])) info.hasPath = true;
+      for (const [dx, dy] of D4) {
+        const nx = x + dx, ny = y + dy;
+        if (!inb(nx, ny)) continue;
+        const k = idx(nx, ny), mt = m[k];
+        if (mt === T.FEED_H) info.feedH = true; else if (mt === T.FEED_C) info.feedC = true;
+        if (region[k] < 0 && DINO_OK(mt)) { region[k] = id; q[t++] = k; }
+      }
+    }
+    regions.push(info);
+  }
+  distH = field(i => adjType(i, T.FEED_H), DINO_OK);
+  distC = field(i => adjType(i, T.FEED_C), DINO_OK);
+  exitDist = field(i => m[i] === T.GATE, WALK_V);
+  nearPath = new Uint8Array(W * H); shops = []; rangers = []; gate = -1;
+  for (let i = 0; i < W * H; i++) {
+    const t = m[i], x = i % W, y = (i / W) | 0;
+    if (WALK_V(t)) for (let dy = -5; dy <= 5; dy++) for (let dx = -5; dx <= 5; dx++) if (inb(x + dx, y + dy)) nearPath[idx(x + dx, y + dy)] = 1;
+    if (t === T.SHOP) shops.push(i);
+    else if (t === T.RANGER) rangers.push(i);
+    else if (t === T.GATE) gate = i;
+  }
+  staticDirty = true;
+}
+const groundFor = (x, y) => D8.some(([dx, dy]) => get(x + dx, y + dy) === T.WATER) ? T.SAND : T.GRASS;
+function setTile(x, y, t) { S.map[idx(x, y)] = t; }
+
+// ---------- Dinosaurs ----------
+function addDino(sp, x, y, name) {
+  const d = { id: S.nextId++, sp, name: name || pick(NAMES), x: x + .5, y: y + .5, tx: x, ty: y, dir: Math.random() < .5 ? -1 : 1,
+    hunger: 20, health: 100, state: 'walk', wait: Math.random() * 2, bt: Math.random(), ldx: 0, ldy: 0, moving: false,
+    ph: Math.random() * 6, wasEsc: false, preyId: 0 };
+  S.dinos.push(d);
+  d.wasEsc = escaped(d);
+  return d;
+}
+const dinoLabel = d => `le ${SPECIES[d.sp].name} ${d.name}`;
+function escaped(d) { const r = region[idx(d.tx, d.ty)]; return r >= 0 && regions[r].hasPath; }
+function regionOf(d) { const r = region[idx(d.tx, d.ty)]; return r >= 0 ? regions[r] : null; }
+function canStep(x, y, dx, dy) {
+  const nx = x + dx, ny = y + dy;
+  if (!inb(nx, ny) || !DINO_OK(get(nx, ny))) return false;
+  if (dx && dy) return DINO_OK(get(x + dx, y)) && DINO_OK(get(x, y + dy));
+  return true;
+}
+function removeDino(d) {
+  S.dinos = S.dinos.filter(o => o !== d);
+  if (selected && selected.kind === 'dino' && selected.id === d.id) selected = null;
+  if (moving === d.id) moving = null;
+}
+function rangerNear(x, y) {
+  return rangers.some(i => Math.max(Math.abs(i % W - x), Math.abs(((i / W) | 0) - y)) <= 7);
+}
+
+function updateDino(d, dt) {
+  const sp = SPECIES[d.sp];
+  d.hunger = Math.min(100, d.hunger + (sp.diet === 'h' ? 1.8 : 2.2) * dt);
+  if (d.hunger >= 100) d.health -= 4 * dt; else d.health = Math.min(100, d.health + dt);
+  if (d.health <= 0) {
+    logMsg(`${cap(dinoLabel(d))} est mort de faim. Pensez aux mangeoires !`, 'bad');
+    removeDino(d); return;
+  }
+  if (d.state === 'hunt') {
+    const prey = S.dinos.find(o => o.id === d.preyId);
+    if (prey && Math.hypot(prey.x - d.x, prey.y - d.y) < .8) {
+      logMsg(`${cap(dinoLabel(d))} a dévoré ${dinoLabel(prey)} !`, 'bad');
+      removeDino(prey); d.hunger = 0; d.state = 'walk'; d.wait = 2;
+    }
+  }
+  const gx = d.tx + .5, gy = d.ty + .5, dx = gx - d.x, dy = gy - d.y, dist = Math.hypot(dx, dy);
+  if (dist > .01) {
+    const step = Math.min(dist, sp.speed * (d.state === 'hunt' ? 1.5 : 1) * dt);
+    d.x += dx / dist * step; d.y += dy / dist * step;
+    if (Math.abs(dx) > .02) d.dir = dx > 0 ? 1 : -1;
+    d.moving = true; return;
+  }
+  d.x = gx; d.y = gy; d.moving = false;
+  if (d.state === 'eat') {
+    d.hunger -= 35 * dt;
+    if (d.hunger <= 0) { d.hunger = 0; d.state = 'walk'; d.wait = 1; }
+    return;
+  }
+  if (d.wait > 0) { d.wait -= dt; return; }
+  const ci = idx(d.tx, d.ty), fld = sp.diet === 'h' ? distH : distC;
+  const go = (nx, ny) => { d.ldx = nx - d.tx; d.ldy = ny - d.ty; d.tx = nx; d.ty = ny; };
+  if (d.hunger > 50 && fld[ci] < INF) {
+    if (fld[ci] === 0) {
+      d.state = 'eat';
+      for (const [ax, ay] of D4) { const t = get(d.tx + ax, d.ty + ay); if ((t === T.FEED_H || t === T.FEED_C) && ax) d.dir = ax; }
+      return;
+    }
+    for (const [ax, ay] of D4) {
+      const nx = d.tx + ax, ny = d.ty + ay;
+      if (inb(nx, ny) && fld[idx(nx, ny)] === fld[ci] - 1) { d.state = 'walk'; go(nx, ny); return; }
+    }
+  }
+  if (sp.diet === 'c' && d.hunger > 60) {
+    const r = region[ci];
+    let best = null, bd = 10;
+    for (const o of S.dinos) {
+      if (o === d || !sp.prey.includes(o.sp) || region[idx(o.tx, o.ty)] !== r) continue;
+      const od = Math.hypot(o.x - d.x, o.y - d.y);
+      if (od < bd) { bd = od; best = o; }
+    }
+    if (best) {
+      d.state = 'hunt'; d.preyId = best.id;
+      let bs = null, bsd = Infinity;
+      for (const [ax, ay] of D8) {
+        if (!canStep(d.tx, d.ty, ax, ay)) continue;
+        const nd = Math.hypot(d.tx + ax + .5 - best.x, d.ty + ay + .5 - best.y);
+        if (nd < bsd) { bsd = nd; bs = [d.tx + ax, d.ty + ay]; }
+      }
+      if (bs) { go(bs[0], bs[1]); return; }
+    }
+  }
+  d.state = 'walk';
+  if (Math.random() < .35) { d.wait = 1 + Math.random() * 3; return; }
+  if ((d.ldx || d.ldy) && Math.random() < .6 && canStep(d.tx, d.ty, d.ldx, d.ldy)) { go(d.tx + d.ldx, d.ty + d.ldy); return; }
+  const opts = D8.filter(([ax, ay]) => canStep(d.tx, d.ty, ax, ay));
+  if (opts.length) { const [ax, ay] = pick(opts); go(d.tx + ax, d.ty + ay); }
+  else d.wait = 2;
+}
+
+// ---------- Visitors ----------
+function spawnVisitor() {
+  const gx = gate % W, gy = (gate / W) | 0;
+  V.push({ x: gx + .5, y: gy + .5, tx: gx, ty: gy, px: -1, py: -1, ox: (Math.random() - .5) * .5, oy: (Math.random() - .5) * .4,
+    state: 'visit', life: 22 + Math.random() * 25, seen: new Set(), color: pick(VCOL), skin: pick(SKIN), shopCd: 2, ph: Math.random() * 6 });
+  earn(FEE); S.totalVisitors++; S.todayVisitors++;
+  if (Math.random() < .3) float(gx + .5, gy - .2, `+${FEE} $`, '#86c77f');
+}
+function updateVisitor(v, dt) {
+  v.life -= dt; v.shopCd -= dt;
+  if (v.state === 'visit' && v.life <= 0) v.state = 'leave';
+  const gx = v.tx + .5 + v.ox, gy = v.ty + .5 + v.oy, dx = gx - v.x, dy = gy - v.y, dist = Math.hypot(dx, dy);
+  if (dist > .02) {
+    const step = Math.min(dist, (v.state === 'flee' ? 2.6 : 1.1) * dt);
+    v.x += dx / dist * step; v.y += dy / dist * step; return true;
+  }
+  const t = get(v.tx, v.ty);
+  if (!WALK_V(t)) return false;
+  if (v.state !== 'visit' && t === T.GATE) return false;
+  visitorLooks(v);
+  const opts = D4.map(([ax, ay]) => [v.tx + ax, v.ty + ay]).filter(([x, y]) => WALK_V(get(x, y)));
+  let next = null;
+  if (v.state === 'visit') {
+    let o2 = opts.filter(([x, y]) => !(x === v.px && y === v.py) && get(x, y) !== T.GATE);
+    if (!o2.length) o2 = opts;
+    if (!o2.length) { v.state = 'leave'; return true; }
+    next = pick(o2);
+  } else {
+    const cur = exitDist[idx(v.tx, v.ty)];
+    next = opts.find(([x, y]) => exitDist[idx(x, y)] === cur - 1);
+    if (!next) return false;
+  }
+  v.px = v.tx; v.py = v.ty; v.tx = next[0]; v.ty = next[1];
+  return true;
+}
+function visitorLooks(v) {
+  for (const d of S.dinos) {
+    const dd = Math.hypot(d.x - v.x, d.y - v.y);
+    if (dd > 5.5) continue;
+    if (escaped(d)) {
+      if (dd < 2.6 && v.state !== 'flee') {
+        v.state = 'flee'; S.incidentsToday++;
+        if (secClock - lastPanicLog > 8) { lastPanicLog = secClock; logMsg(`Panique ! ${cap(dinoLabel(d))} fait fuir les visiteurs.`, 'bad'); }
+      }
+    } else if (!v.seen.has(d.sp)) {
+      v.seen.add(d.sp);
+      if (Math.random() < .2) float(v.x, v.y - .5, '♥', '#f27fa6');
+    }
+  }
+  if (v.state === 'visit' && v.shopCd <= 0) {
+    for (const [ax, ay] of D8) {
+      if (get(v.tx + ax, v.ty + ay) === T.SHOP && Math.random() < .35) {
+        earn(8); v.shopCd = 10; float(v.tx + ax + .5, v.ty + ay, '+8 $', '#f0a33a'); break;
+      }
+    }
+  }
+}
+
+// ---------- Economy & log ----------
+function earn(n) { S.money += n; S.todayIn += n; }
+function spend(n) { S.money -= n; S.todayOut += n; }
+function float(x, y, text, color) { F.push({ x, y, text, color, t: 0 }); }
+const cap = s => s.charAt(0).toUpperCase() + s.slice(1);
+function logMsg(m, kind = 'info') {
+  S.log.unshift({ d: S.day, m, k: kind });
+  if (S.log.length > 40) S.log.length = 40;
+  logDirty = true;
+}
+let logDirty = true;
+
+function endDay() {
+  S.time -= DAY;
+  let up = 0;
+  for (const d of S.dinos) up += SPECIES[d.sp].upkeep;
+  for (const t of S.map) up += UPKEEP[t] || 0;
+  spend(up);
+  S.yesterday = { in: S.todayIn, out: S.todayOut, visitors: S.todayVisitors };
+  const net = S.todayIn - S.todayOut;
+  logMsg(`Fin du jour ${S.day} : ${S.todayVisitors} visiteurs, bilan ${net >= 0 ? '+' : '−'}${fmt(Math.abs(net))}.`, net >= 0 ? 'good' : 'bad');
+  if (S.money < 0) logMsg('La caisse est vide ! Vendez un dino ou attirez plus de visiteurs.', 'bad');
+  S.day++; S.todayIn = 0; S.todayOut = 0; S.todayVisitors = 0; S.incidentsToday = 0;
+  save();
+}
+
+// ---------- Simulation ----------
+let secClock = 0;
+function perSecond() {
+  secClock++;
+  for (const r of regions) r.load = 0;
+  for (const d of S.dinos) { const r = regionOf(d); if (r) r.load += SPECIES[d.sp].space; }
+  let broke = false;
+  for (const d of S.dinos) {
+    const esc = escaped(d);
+    if (esc && !d.wasEsc) logMsg(`Alerte ! ${cap(dinoLabel(d))} s’est échappé !`, 'bad');
+    else if (!esc && d.wasEsc) logMsg(`${cap(dinoLabel(d))} est de nouveau dans un enclos fermé.`, 'good');
+    d.wasEsc = esc;
+    if (esc) continue;
+    const sp = SPECIES[d.sp], r = regionOf(d);
+    const fences = D4.map(([ax, ay]) => [d.tx + ax, d.ty + ay]).filter(([x, y]) => get(x, y) === T.FENCE);
+    if (!fences.length) continue;
+    const stressed = d.hunger > 70 || (r && r.load > r.size);
+    const chance = sp.brk * (stressed ? 1 : .12) * (rangerNear(d.tx, d.ty) ? .4 : 1);
+    if (Math.random() < chance) {
+      const [fx, fy] = pick(fences);
+      setTile(fx, fy, T.BROKEN); broke = true;
+      logMsg(`${cap(dinoLabel(d))} a cassé une clôture !`, 'bad');
+    }
+  }
+  if (broke) rebuild();
+  rangerAcc++;
+  if (rangerAcc >= 5) {
+    rangerAcc = 0;
+    let fixed = 0;
+    for (const ri of rangers) {
+      const rx = ri % W, ry = (ri / W) | 0;
+      let best = -1, bd = 99;
+      for (let i = 0; i < W * H; i++) {
+        if (S.map[i] !== T.BROKEN) continue;
+        const dd = Math.max(Math.abs(i % W - rx), Math.abs(((i / W) | 0) - ry));
+        if (dd <= 7 && dd < bd) { bd = dd; best = i; }
+      }
+      if (best >= 0) { S.map[best] = T.FENCE; fixed++; }
+    }
+    if (fixed) { rebuild(); logMsg(`Les rangers ont réparé ${fixed > 1 ? fixed + ' clôtures' : 'une clôture'}.`, 'good'); }
+  }
+  computeRating();
+  for (const g of GOALS) {
+    if (S.goals[g.id]) continue;
+    const [a, b] = g.p();
+    if (a >= b) { S.goals[g.id] = S.day; logMsg(`Objectif atteint : ${g.t} !`, 'good'); goalsDirty = true; }
+  }
+  goalsDirty = true;
+}
+let goalsDirty = true;
+function computeRating() {
+  const sp = new Set();
+  let vis = 0, esc = 0;
+  for (const d of S.dinos) {
+    if (escaped(d)) { esc++; continue; }
+    if (nearPath[idx(d.tx, d.ty)]) { vis++; sp.add(d.sp); }
+  }
+  let score = 0;
+  for (const s of sp) score += SPECIES[s].appeal;
+  score += vis * .6 + Math.min(shops.length, 4) * .8 - esc * 4 - Math.min(10, S.incidentsToday) * .5;
+  stars = clamp(Math.round(score / 5 * 2) / 2, 0, 5);
+  visibleSpecies = sp.size;
+}
+function sim(dt) {
+  S.time += dt;
+  for (const d of S.dinos.slice()) updateDino(d, dt);
+  V = V.filter(v => updateVisitor(v, dt));
+  for (const f of F) { f.t += dt; f.y -= dt * .7; }
+  F = F.filter(f => f.t < 1.4);
+  const frac = S.time / DAY;
+  if (frac > .9) for (const v of V) if (v.state === 'visit') v.state = 'leave';
+  const gateOpen = gate >= 0 && D4.some(([dx, dy]) => get(gate % W + dx, ((gate / W) | 0) + dy) === T.PATH);
+  if (gateOpen && frac < .85 && V.length < 160) {
+    spawnAcc += (.2 + .4 * stars) * dt;
+    while (spawnAcc >= 1) { spawnAcc--; spawnVisitor(); }
+  }
+  secAcc += dt;
+  if (secAcc >= 1) { secAcc -= 1; perSecond(); }
+  if (S.time >= DAY) endDay();
+}
+
+// ---------- Tools ----------
+function dinoOn(x, y) { return S.dinos.some(d => (d.tx === x && d.ty === y) || (Math.floor(d.x) === x && Math.floor(d.y) === y)); }
+function dinoAtPoint(fx, fy) {
+  let best = null, bd = .75;
+  for (const d of S.dinos) {
+    const dd = Math.hypot(fx - d.x, fy - (d.y - .25));
+    if (dd < bd) { bd = dd; best = d; }
+  }
+  return best;
+}
+function canPlace(id, x, y, fx, fy) {
+  if (!inb(x, y)) return { ok: false, msg: '' };
+  const t = get(x, y), tl = TOOL[id];
+  const no = msg => ({ ok: false, msg });
+  if (id === 'select') return { ok: true };
+  if (id === 'move' && moving == null) return dinoAtPoint(fx, fy) ? { ok: true } : no('Cliquez d’abord sur un dinosaure.');
+  if (t === T.WATER) return no('Impossible de construire sur l’eau.');
+  if (id === 'path' || id === 'fence' || tl.tile !== undefined) {
+    if (id === 'fence' && t === T.BROKEN) { /* repair */ }
+    else if (id === 'path' && t === T.PATH) return no('Il y a déjà une allée ici.');
+    else if (id === 'fence' && t === T.FENCE) return no('Il y a déjà une clôture ici.');
+    else if (!FREE(t)) return no('Cette case est déjà occupée.');
+    if (dinoOn(x, y)) return no('Un dinosaure se trouve sur cette case.');
+  } else if (id === 'tree') {
+    if (t !== T.GRASS && t !== T.SAND) return no('Plantez sur l’herbe ou le sable.');
+  } else if (id === 'bulldoze') {
+    if (t === T.GATE) return no('L’entrée du parc ne peut pas être démolie.');
+    if (t === T.GRASS || t === T.SAND) return no('Rien à démolir ici.');
+  } else if (tl.sp || id === 'move') {
+    if (!DINO_OK(t) || t === T.PATH || t === T.GATE) return no('Posez le dinosaure sur l’herbe, pas sur une allée.');
+  }
+  if (tl.cost > S.money) return no(`Pas assez d’argent : il faut ${fmt(tl.cost)}.`);
+  return { ok: true };
+}
+function applyTool(x, y, fx, fy, quiet) {
+  if (tool === 'select') {
+    const d = dinoAtPoint(fx, fy);
+    if (d) selected = { kind: 'dino', id: d.id };
+    else if (inb(x, y) && TILE_INFO[get(x, y)]) selected = { kind: 'tile', x, y };
+    else selected = null;
+    sellArmed = false;
+    return;
+  }
+  const r = canPlace(tool, x, y, fx, fy);
+  if (!r.ok) { if (!quiet && r.msg) flash(r.msg); return; }
+  const tl = TOOL[tool];
+  let cost = tl.cost;
+  if (tool === 'path') setTile(x, y, T.PATH);
+  else if (tool === 'fence') setTile(x, y, T.FENCE);
+  else if (tool === 'tree') setTile(x, y, T.TREE);
+  else if (tl.tile !== undefined) setTile(x, y, tl.tile);
+  else if (tool === 'bulldoze') {
+    const t = get(x, y), refund = (BUILD_COST[t] || 0) / 2;
+    setTile(x, y, groundFor(x, y));
+    if (refund) { S.money += refund; float(x + .5, y, `+${refund} $`, '#86c77f'); }
+  } else if (tl.sp) {
+    const d = addDino(tl.sp, x, y);
+    selected = { kind: 'dino', id: d.id };
+    logMsg(`Éclosion : ${dinoLabel(d)} vient de naître !`, 'good');
+  } else if (tool === 'move') {
+    if (moving == null) {
+      const d = dinoAtPoint(fx, fy);
+      moving = d.id; selected = { kind: 'dino', id: d.id };
+      flash(`Choisissez la nouvelle place de ${d.name}.`, true);
+      return;
+    }
+    const d = S.dinos.find(o => o.id === moving);
+    moving = null;
+    if (!d) return;
+    d.x = x + .5; d.y = y + .5; d.tx = x; d.ty = y; d.state = 'walk'; d.wait = 1.5; d.ldx = d.ldy = 0;
+    logMsg(`${cap(d.name)} a pris l’hélicoptère vers sa nouvelle place.`, 'info');
+  }
+  spend(cost);
+  if (cost >= 100) float(x + .5, y, `−${cost} $`, '#e5583f');
+  rebuild();
+  if (tl.sp) { const d = S.dinos[S.dinos.length - 1]; d.wasEsc = escaped(d); if (d.wasEsc) logMsg(`Attention : ${d.name} n’est pas dans un enclos fermé !`, 'bad'); }
+}
+
+// ---------- Drawing: dinosaurs ----------
+function drawDino(c, key, x, y, dir, t, u, moving, alpha = 1) {
+  const s = SPECIES[key], b = s.b;
+  c.save(); c.globalAlpha = alpha; c.translate(x, y);
+  c.fillStyle = 'rgba(0,0,0,.22)';
+  c.beginPath(); c.ellipse(0, 0, (b.len * .55 + .05) * u, .1 * u, 0, 0, Math.PI * 2); c.fill();
+  c.scale(dir, 1);
+  const L = b.len * u / 2, Hh = b.h * u / 2;
+  const bob = moving ? Math.sin(t * 12) * u * .012 : 0;
+  const sw = moving ? Math.sin(t * 12) * u * .07 : 0;
+  const by = -(b.leg * u) - Hh * .7 + bob;
+  const hx = L + b.hx * u, hy = by + b.hy * u, hrx = b.hrx * u, hry = b.hry * u;
+  c.lineCap = 'round'; c.lineJoin = 'round';
+  legs(c, b, L, by, u, -sw, s.dark);
+  // tail
+  c.fillStyle = s.color;
+  c.beginPath();
+  c.moveTo(-L * .6, by - Hh * .55);
+  c.quadraticCurveTo(-L - b.tail * u * .5, by - Hh * .2, -L - b.tail * u, by + b.tailDrop * u);
+  c.quadraticCurveTo(-L - b.tail * u * .4, by + Hh * .4, -L * .6, by + Hh * .6);
+  c.closePath(); c.fill();
+  if (key === 'stego') {
+    c.fillStyle = s.accent;
+    for (let i = 0; i < 6; i++) {
+      const px = -L * .7 + i * (L * 1.3 / 5), top = by - Hh * Math.sqrt(Math.max(0, 1 - (px / L) ** 2)) + Hh * .15;
+      const ht = u * (.15 - .05 * Math.abs(i - 2.5) / 2.5);
+      c.beginPath(); c.moveTo(px - u * .06, top + u * .03); c.lineTo(px, top - ht); c.lineTo(px + u * .06, top + u * .03); c.closePath(); c.fill();
+    }
+    c.strokeStyle = s.accent; c.lineWidth = u * .03;
+    const tx = -L - b.tail * u, ty = by + b.tailDrop * u;
+    c.beginPath(); c.moveTo(tx + u * .1, ty - u * .02); c.lineTo(tx + u * .02, ty - u * .12); c.moveTo(tx + u * .16, ty - u * .03); c.lineTo(tx + u * .12, ty - u * .14); c.stroke();
+  }
+  // body
+  c.save(); c.translate(0, by); c.rotate(b.tilt || 0);
+  c.beginPath(); c.ellipse(0, 0, L, Hh, 0, 0, Math.PI * 2); c.fillStyle = s.color; c.fill(); c.clip();
+  c.fillStyle = s.belly; c.beginPath(); c.ellipse(L * .1, Hh * .95, L * .95, Hh * .55, 0, 0, Math.PI * 2); c.fill();
+  if (key === 'raptor' || key === 'rex') {
+    c.strokeStyle = s.accent; c.lineWidth = u * .025; c.globalAlpha = alpha * .6;
+    for (let i = 0; i < 4; i++) { const sx = -L * .5 + i * L * .3; c.beginPath(); c.moveTo(sx, -Hh); c.lineTo(sx - u * .04, -Hh * .3); c.stroke(); }
+    c.globalAlpha = alpha;
+  }
+  c.restore();
+  legs(c, b, L, by, u, sw, s.color);
+  // neck
+  const nx0 = L * .5, ny0 = by - Hh * .25;
+  c.strokeStyle = s.color; c.lineWidth = b.neckW * u;
+  c.beginPath(); c.moveTo(nx0, ny0); c.quadraticCurveTo(nx0 + (hx - nx0) * .3, hy + (ny0 - hy) * .15, hx - hrx * .4, hy); c.stroke();
+  if (key === 'trike') {
+    c.fillStyle = s.accent;
+    c.beginPath(); c.arc(hx - hrx * .7, hy - hry * .5, hry * 1.45, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = shade(s.accent, -40); c.lineWidth = 1; c.stroke();
+  }
+  // head
+  c.fillStyle = s.color;
+  c.beginPath(); c.ellipse(hx, hy, hrx, hry, key === 'stego' ? .25 : 0, 0, Math.PI * 2); c.fill();
+  if (key === 'trike') {
+    c.strokeStyle = '#efe6cf'; c.lineWidth = Math.max(1.2, u * .035);
+    c.beginPath(); c.moveTo(hx + hrx * .1, hy - hry * .7); c.lineTo(hx + hrx * 1.0, hy - hry * 2.1);
+    c.moveTo(hx + hrx * .85, hy - hry * .3); c.lineTo(hx + hrx * 1.15, hy - hry * 1.0); c.stroke();
+  }
+  if (key === 'rex' || key === 'raptor') {
+    c.strokeStyle = s.dark; c.lineWidth = Math.max(1, u * .02);
+    c.beginPath(); c.moveTo(hx - hrx * .1, hy + hry * .3); c.lineTo(hx + hrx * .95, hy + hry * .25); c.stroke();
+    c.strokeStyle = s.color; c.lineWidth = u * (key === 'rex' ? .045 : .03);
+    c.beginPath(); c.moveTo(L * .7, by + Hh * .1); c.lineTo(L * .95, by + Hh * .55); c.stroke();
+  }
+  c.fillStyle = '#1a140e';
+  c.beginPath(); c.arc(hx + hrx * .35, hy - hry * .3, Math.max(1.1, u * .022), 0, Math.PI * 2); c.fill();
+  c.restore();
+}
+function legs(c, b, L, by, u, sw, color) {
+  c.strokeStyle = color;
+  if (b.biped) {
+    const lx = -L * .05;
+    c.lineWidth = b.legW * u;
+    c.beginPath(); c.moveTo(lx, by); c.lineTo(lx + u * .05 + sw * .4, by * .45); c.lineTo(lx + sw, -u * .01); c.stroke();
+    c.lineWidth = b.legW * u * .6;
+    c.beginPath(); c.moveTo(lx + sw, -u * .01); c.lineTo(lx + sw + u * .08, -u * .01); c.stroke();
+  } else {
+    c.lineWidth = b.legW * u;
+    for (const lx of [-L * .55, L * .5]) { c.beginPath(); c.moveTo(lx, by); c.lineTo(lx + sw, -u * .02); c.stroke(); }
+  }
+}
+
+// ---------- Drawing: tiles ----------
+function drawGround(c, px, py, x, y, sand) {
+  c.fillStyle = (sand ? SAND_C : GRASS_C)[(hash(x, y) * 3) | 0];
+  c.fillRect(px, py, TS, TS);
+  if (sand) {
+    c.fillStyle = 'rgba(120,95,50,.28)';
+    for (let k = 0; k < 3; k++) c.fillRect(px + 2 + hash(x, y, k + 1) * 27, py + 2 + hash(x, y, k + 9) * 27, 2, 2);
+  } else {
+    c.strokeStyle = 'rgba(30,60,20,.35)'; c.lineWidth = 1;
+    for (let k = 0; k < 3; k++) {
+      const tx = px + 4 + hash(x, y, k + 1) * 24, ty = py + 7 + hash(x, y, k + 5) * 22;
+      c.beginPath(); c.moveTo(tx, ty); c.lineTo(tx - 2, ty - 4); c.moveTo(tx, ty); c.lineTo(tx + 2, ty - 5); c.stroke();
+    }
+  }
+}
+function drawTile(c, t, x, y, px, py, nb) {
+  const shore = D8.some(([dx, dy]) => nb(dx, dy) === T.WATER);
+  const cx = px + TS / 2, cy = py + TS / 2;
+  if (t === T.WATER) {
+    const land = D4.some(([dx, dy]) => nb(dx, dy) !== T.WATER);
+    c.fillStyle = land ? '#3a87a2' : ['#2c6f8c', '#2a6b88', '#2e7290'][(hash(x, y) * 3) | 0];
+    c.fillRect(px, py, TS, TS);
+    c.strokeStyle = 'rgba(255,255,255,.16)'; c.lineWidth = 1.2;
+    const wx = px + 6 + hash(x, y, 3) * 16, wy = py + 8 + hash(x, y, 4) * 16;
+    c.beginPath(); c.moveTo(wx, wy); c.quadraticCurveTo(wx + 4, wy - 3, wx + 8, wy); c.stroke();
+    if (land) {
+      c.fillStyle = 'rgba(255,255,255,.35)';
+      for (const [dx, dy] of D4) {
+        if (nb(dx, dy) === T.WATER) continue;
+        if (dy === -1) c.fillRect(px, py, TS, 2); if (dy === 1) c.fillRect(px, py + TS - 2, TS, 2);
+        if (dx === -1) c.fillRect(px, py, 2, TS); if (dx === 1) c.fillRect(px + TS - 2, py, 2, TS);
+      }
+    }
+    return;
+  }
+  drawGround(c, px, py, x, y, t === T.SAND || (t !== T.GRASS && shore));
+  if (t === T.TREE) {
+    const ox = (hash(x, y, 7) - .5) * 6, oy = (hash(x, y, 8) - .5) * 4;
+    c.fillStyle = 'rgba(0,0,0,.2)'; c.beginPath(); c.ellipse(cx + 2 + ox, cy + 9 + oy, 12, 5, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#2f5e2a';
+    for (const [ax, ay, r] of [[-6, 1, 9], [6, 2, 9], [0, -5, 10]]) { c.beginPath(); c.arc(cx + ax + ox, cy + ay + oy, r, 0, Math.PI * 2); c.fill(); }
+    c.fillStyle = '#3f7a35'; c.beginPath(); c.arc(cx - 2 + ox, cy - 6 + oy, 6, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#5a9645'; c.beginPath(); c.arc(cx - 4 + ox, cy - 8 + oy, 3, 0, Math.PI * 2); c.fill();
+  } else if (t === T.PATH || t === T.GATE) {
+    const conn = (dx, dy) => { const n = nb(dx, dy); return n === T.PATH || n === T.GATE; };
+    c.fillStyle = '#a99467'; c.fillRect(px + 3, py + 3, TS - 6, TS - 6);
+    c.fillStyle = '#cdb98c'; c.fillRect(px + 4, py + 4, TS - 8, TS - 8);
+    if (conn(0, -1)) c.fillRect(px + 4, py, TS - 8, 4);
+    if (conn(0, 1)) c.fillRect(px + 4, py + TS - 4, TS - 8, 4);
+    if (conn(-1, 0)) c.fillRect(px, py + 4, 4, TS - 8);
+    if (conn(1, 0)) c.fillRect(px + TS - 4, py + 4, 4, TS - 8);
+    c.fillStyle = 'rgba(110,90,55,.35)';
+    for (let k = 0; k < 3; k++) c.fillRect(px + 6 + hash(x, y, k + 20) * 19, py + 6 + hash(x, y, k + 30) * 19, 2, 2);
+    if (t === T.GATE) {
+      c.fillStyle = '#6b4226'; c.fillRect(px - 2, py - 14, 6, 30); c.fillRect(px + TS - 4, py - 14, 6, 30);
+      c.fillStyle = '#4f2f1a'; c.fillRect(px - 5, py - 18, TS + 10, 7);
+      c.fillStyle = '#f0a33a'; c.fillRect(px + 6, py - 17, TS - 12, 5);
+      c.fillStyle = '#3f7a35';
+      for (const ax of [-4, 6, 16, 26, 36]) { c.beginPath(); c.arc(px + ax, py - 19, 4, 0, Math.PI * 2); c.fill(); }
+    }
+  } else if (t === T.FENCE || t === T.BROKEN) {
+    const fc = n => n === T.FENCE || n === T.BROKEN;
+    let dirs = D4.filter(([dx, dy]) => fc(nb(dx, dy)));
+    if (!dirs.length) dirs = [[-1, 0], [1, 0]];
+    const broken = t === T.BROKEN;
+    for (const [dx, dy] of dirs) {
+      const ex = cx + dx * TS / 2, ey = cy + dy * TS / 2;
+      const rails = dy === 0 ? [-5, 1] : [0];
+      for (const off of rails) {
+        c.setLineDash(broken ? [3, 4] : []);
+        c.strokeStyle = broken ? '#7a2a1d' : '#34322c'; c.lineWidth = 4;
+        c.beginPath(); c.moveTo(cx, cy + off); c.lineTo(ex, ey + off); c.stroke();
+        c.strokeStyle = broken ? '#e5583f' : '#d8d2bf'; c.lineWidth = 1.6;
+        c.beginPath(); c.moveTo(cx, cy + off); c.lineTo(ex, ey + off); c.stroke();
+      }
+    }
+    c.setLineDash([]);
+    c.save(); c.translate(cx, cy); if (broken) c.rotate(.5);
+    c.fillStyle = '#45413a'; c.fillRect(-3, -10, 6, 14);
+    c.fillStyle = broken ? '#e5583f' : '#f0a33a'; c.fillRect(-3, -11, 6, 3);
+    c.restore();
+    if (broken) {
+      c.strokeStyle = '#ffd36b'; c.lineWidth = 1.2;
+      c.beginPath(); c.moveTo(cx + 6, cy - 9); c.lineTo(cx + 9, cy - 5); c.lineTo(cx + 7, cy - 4); c.lineTo(cx + 11, cy); c.stroke();
+    }
+  } else if (t === T.FEED_H || t === T.FEED_C) {
+    c.fillStyle = 'rgba(0,0,0,.2)'; c.beginPath(); c.ellipse(cx + 1, py + 27, 13, 4, 0, 0, Math.PI * 2); c.fill();
+    c.fillStyle = '#6b4a2b'; c.fillRect(px + 4, py + 14, 24, 12);
+    c.fillStyle = '#4a321c'; c.fillRect(px + 6, py + 15, 20, 4);
+    if (t === T.FEED_H) {
+      for (const [ax, ay, r, col] of [[10, 15, 5, '#4c9a3a'], [16, 12, 6, '#5fae4a'], [22, 15, 5, '#4c9a3a'], [14, 15, 4, '#6fc055']]) {
+        c.fillStyle = col; c.beginPath(); c.arc(px + ax, py + ay, r, 0, Math.PI * 2); c.fill();
+      }
+    } else {
+      c.fillStyle = '#b8463a'; c.beginPath(); c.ellipse(cx, py + 14, 9, 5.5, 0, 0, Math.PI * 2); c.fill();
+      c.fillStyle = '#d4685a'; c.beginPath(); c.ellipse(cx - 2, py + 12.5, 5, 2.5, 0, 0, Math.PI * 2); c.fill();
+      c.strokeStyle = '#efe6cf'; c.lineWidth = 3; c.lineCap = 'round';
+      c.beginPath(); c.moveTo(px + 20, py + 10); c.lineTo(px + 27, py + 6); c.stroke(); c.lineCap = 'butt';
+    }
+  } else if (t === T.SHOP) {
+    c.fillStyle = 'rgba(0,0,0,.2)'; c.fillRect(px + 5, py + 27, 26, 4);
+    c.fillStyle = '#efe4c8'; c.fillRect(px + 3, py + 10, 26, 19);
+    c.fillStyle = '#7a4b2a'; c.fillRect(px + 13, py + 19, 7, 10);
+    c.fillStyle = '#9fd0e0'; c.fillRect(px + 5, py + 16, 6, 5); c.fillRect(px + 22, py + 16, 5, 5);
+    for (let i = 0; i < 6; i++) { c.fillStyle = i % 2 ? '#f6eedb' : '#d0483a'; c.fillRect(px + 1 + i * 5, py + 5, 5, 8); }
+    c.fillStyle = '#d0483a';
+    for (let i = 0; i < 6; i += 2) { c.beginPath(); c.arc(px + 3.5 + i * 5, py + 13, 2.5, 0, Math.PI); c.fill(); }
+  } else if (t === T.RANGER) {
+    c.fillStyle = 'rgba(0,0,0,.2)'; c.fillRect(px + 7, py + 27, 22, 4);
+    c.fillStyle = '#8c6a43'; c.fillRect(px + 5, py + 13, 22, 16);
+    c.fillStyle = '#5a4128'; c.fillRect(px + 13, py + 20, 6, 9);
+    c.fillStyle = '#3f6b3a'; c.beginPath(); c.moveTo(px + 2, py + 14); c.lineTo(px + 16, py + 3); c.lineTo(px + 30, py + 14); c.closePath(); c.fill();
+    c.strokeStyle = '#d8d2bf'; c.lineWidth = 1.5; c.beginPath(); c.moveTo(px + 28, py + 13); c.lineTo(px + 28, py - 6); c.stroke();
+    c.fillStyle = '#f0a33a'; c.beginPath(); c.moveTo(px + 28, py - 6); c.lineTo(px + 36, py - 3); c.lineTo(px + 28, py); c.closePath(); c.fill();
+  }
+}
+
+// ---------- Rendering ----------
+const cv = document.getElementById('map'), ctx = cv.getContext('2d');
+const DPR = Math.min(2, window.devicePixelRatio || 1);
+cv.width = W * TS * DPR; cv.height = H * TS * DPR;
+const sc = document.createElement('canvas'); sc.width = cv.width; sc.height = cv.height;
+const sctx = sc.getContext('2d');
+
+function renderStatic() {
+  sctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  sctx.clearRect(0, 0, W * TS, H * TS);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++)
+    drawTile(sctx, S.map[idx(x, y)], x, y, x * TS, y * TS, (dx, dy) => get(x + dx, y + dy));
+}
+function dayLight() {
+  const h = 7 + S.time / DAY * 16;
+  if (h >= 20) return Math.min(.42, (h - 20) / 2.5 * .42);
+  if (h < 8) return (8 - h) * .3;
+  return 0;
+}
+function render(now) {
+  if (staticDirty) { renderStatic(); staticDirty = false; }
+  const t = now / 1000;
+  ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  ctx.drawImage(sc, 0, 0, W * TS, H * TS);
+  const selDino = selected && selected.kind === 'dino' ? S.dinos.find(d => d.id === selected.id) : null;
+  if (selDino) {
+    const r = region[idx(selDino.tx, selDino.ty)];
+    ctx.fillStyle = escaped(selDino) ? 'rgba(229,88,63,.16)' : 'rgba(240,163,58,.16)';
+    for (let i = 0; i < W * H; i++) if (region[i] === r) ctx.fillRect((i % W) * TS, ((i / W) | 0) * TS, TS, TS);
+  }
+  if (selected && selected.kind === 'tile') {
+    ctx.strokeStyle = '#f0a33a'; ctx.lineWidth = 2; ctx.strokeRect(selected.x * TS + 1, selected.y * TS + 1, TS - 2, TS - 2);
+  }
+  // hover
+  if (hover && tool !== 'select' && !(tool === 'move' && moving == null)) {
+    const r = canPlace(tool, hover.x, hover.y, hover.fx, hover.fy);
+    ctx.fillStyle = r.ok ? 'rgba(134,199,127,.3)' : 'rgba(229,88,63,.3)';
+    ctx.fillRect(hover.x * TS, hover.y * TS, TS, TS);
+    ctx.strokeStyle = r.ok ? '#86c77f' : '#e5583f'; ctx.lineWidth = 1.5;
+    ctx.strokeRect(hover.x * TS + .75, hover.y * TS + .75, TS - 1.5, TS - 1.5);
+  } else if (hover) {
+    ctx.strokeStyle = 'rgba(255,255,255,.45)'; ctx.lineWidth = 1;
+    ctx.strokeRect(hover.x * TS + .5, hover.y * TS + .5, TS - 1, TS - 1);
+  }
+  // entities, back to front
+  const ents = [];
+  for (const d of S.dinos) ents.push([d.y, 0, d]);
+  for (const v of V) ents.push([v.y, 1, v]);
+  ents.sort((a, b) => a[0] - b[0]);
+  for (const [, kind, e] of ents) {
+    if (kind === 0) {
+      const sp = SPECIES[e.sp], u = TS * sp.scale, fx = e.x * TS, fy = (e.y + .3) * TS;
+      if (e === selDino) {
+        ctx.strokeStyle = '#f0a33a'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(fx, fy, (sp.b.len * .6 + .1) * u, .16 * u, 0, 0, Math.PI * 2); ctx.stroke();
+      }
+      drawDino(ctx, e.sp, fx, fy, e.dir, t + e.ph, u, e.moving || e.state === 'eat', moving === e.id ? .5 : 1);
+      const top = fy - (sp.b.leg + sp.b.h + Math.max(0, -sp.b.hy) + .25) * u;
+      const esc = escaped(e);
+      if (esc || e.hunger > 75) {
+        if (!esc || Math.sin(t * 8) > -.3) {
+          ctx.fillStyle = esc ? '#e5583f' : '#f0a33a';
+          ctx.beginPath(); ctx.arc(fx, top, 6, 0, Math.PI * 2); ctx.fill();
+          ctx.fillStyle = '#1a140e'; ctx.font = '700 10px Barlow, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+          ctx.fillText('!', fx, top + .5);
+        }
+      }
+      if (e === selDino) {
+        ctx.font = '600 11px Barlow, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(18,32,26,.85)'; ctx.strokeText(e.name, fx, top - 8);
+        ctx.fillStyle = '#efe7d2'; ctx.fillText(e.name, fx, top - 8);
+      }
+    } else {
+      const x = e.x * TS, y = e.y * TS, b = Math.abs(Math.sin(t * 9 + e.ph)) * 1.2;
+      ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x, y + 4, 3.5, 1.5, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = e.color; ctx.beginPath(); ctx.ellipse(x, y - b, 3.2, 4.2, 0, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = e.skin; ctx.beginPath(); ctx.arc(x, y - 6 - b, 2.6, 0, Math.PI * 2); ctx.fill();
+      if (e.state === 'flee') {
+        ctx.fillStyle = '#e5583f'; ctx.font = '700 9px Barlow, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom';
+        ctx.fillText('!', x, y - 9);
+      }
+    }
+  }
+  // placement ghost
+  if (hover && (TOOL[tool].sp || (tool === 'move' && moving != null))) {
+    const sp = TOOL[tool].sp || (S.dinos.find(d => d.id === moving) || {}).sp;
+    if (sp) drawDino(ctx, sp, (hover.x + .5) * TS, (hover.y + .8) * TS, 1, t, TS * SPECIES[sp].scale, false, .55);
+  }
+  // floating texts
+  ctx.font = '700 11px Barlow, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+  for (const f of F) {
+    ctx.globalAlpha = 1 - f.t / 1.4;
+    ctx.lineWidth = 3; ctx.strokeStyle = 'rgba(18,32,26,.8)'; ctx.strokeText(f.text, f.x * TS, f.y * TS);
+    ctx.fillStyle = f.color; ctx.fillText(f.text, f.x * TS, f.y * TS);
+  }
+  ctx.globalAlpha = 1;
+  // night
+  const dark = dayLight();
+  if (dark > 0) {
+    ctx.fillStyle = `rgba(10,16,48,${dark})`; ctx.fillRect(0, 0, W * TS, H * TS);
+    ctx.globalCompositeOperation = 'lighter';
+    for (const i of [...shops, ...rangers, gate]) {
+      if (i < 0) continue;
+      const lx = (i % W + .5) * TS, ly = (((i / W) | 0) + .5) * TS;
+      const g = ctx.createRadialGradient(lx, ly, 2, lx, ly, TS * 1.6);
+      g.addColorStop(0, `rgba(255,190,110,${dark * .7})`); g.addColorStop(1, 'rgba(255,190,110,0)');
+      ctx.fillStyle = g; ctx.fillRect(lx - TS * 2, ly - TS * 2, TS * 4, TS * 4);
+    }
+    ctx.globalCompositeOperation = 'source-over';
+  }
+}
+
+// ---------- UI ----------
+const $ = id => document.getElementById(id);
+const hintEl = $('hint'), insEl = $('inspect');
+let flashUntil = 0;
+function flash(msg, info) { hintEl.textContent = msg; hintEl.className = info ? 'hint' : 'hint err'; flashUntil = performance.now() + 2200; }
+function showToolHint() { if (performance.now() > flashUntil) { hintEl.textContent = TOOL[tool].desc; hintEl.className = 'hint'; } }
+
+function buildToolbar() {
+  for (const tl of TOOLS) {
+    const b = document.createElement('button');
+    b.type = 'button'; b.className = 'tool'; b.dataset.tool = tl.id; b.title = tl.desc;
+    const c = document.createElement('canvas'); c.width = 72; c.height = 72;
+    b.append(c);
+    const n = document.createElement('span'); n.className = 'tn'; n.textContent = tl.name;
+    const p = document.createElement('span'); p.className = 'tp'; p.textContent = tl.cost ? fmt(tl.cost) : 'Gratuit';
+    b.append(n, p);
+    b.addEventListener('click', () => setTool(tl.id));
+    $(tl.g).append(b);
+    drawIcon(c.getContext('2d'), tl);
+  }
+}
+function drawIcon(c, tl) {
+  c.scale(72 / 40, 72 / 40);
+  c.translate(4, 4);
+  const plain = () => T.GRASS;
+  if (tl.sp) {
+    const s = SPECIES[tl.sp], u = { stego: 20, trike: 19, brachio: 15, raptor: 26, rex: 15 }[tl.sp];
+    drawDino(c, tl.sp, 18, 30, 1, 0, u, false);
+  } else if (tl.id === 'path') drawTile(c, T.PATH, 3, 3, 0, 0, (dx, dy) => dy === 0 ? T.PATH : T.GRASS);
+  else if (tl.id === 'fence') drawTile(c, T.FENCE, 3, 3, 0, 0, (dx, dy) => dy === 0 ? T.FENCE : T.GRASS);
+  else if (tl.id === 'tree') drawTile(c, T.TREE, 5, 2, 0, 0, plain);
+  else if (tl.tile !== undefined) drawTile(c, tl.tile, 4, 4, 0, 0, plain);
+  else {
+    c.strokeStyle = '#efe7d2'; c.lineWidth = 2.5; c.lineCap = 'round'; c.lineJoin = 'round';
+    if (tl.id === 'select') {
+      c.beginPath(); c.arc(14, 14, 8, 0, Math.PI * 2); c.moveTo(20, 20); c.lineTo(28, 28); c.stroke();
+    } else if (tl.id === 'move') {
+      c.beginPath(); c.moveTo(4, 9); c.lineTo(28, 9); c.moveTo(16, 9); c.lineTo(16, 13); c.stroke();
+      c.fillStyle = '#f0a33a'; c.beginPath(); c.ellipse(15, 18, 9, 6, 0, 0, Math.PI * 2); c.fill();
+      c.beginPath(); c.moveTo(22, 17); c.lineTo(31, 15); c.stroke();
+      c.beginPath(); c.moveTo(9, 26); c.lineTo(21, 26); c.stroke();
+    } else {
+      c.strokeStyle = '#e5583f';
+      c.beginPath(); c.moveTo(7, 7); c.lineTo(25, 25); c.moveTo(25, 7); c.lineTo(7, 25); c.stroke();
+    }
+  }
+}
+function setTool(id) {
+  tool = id; moving = null; flashUntil = 0;
+  for (const b of document.querySelectorAll('.tool')) b.setAttribute('aria-pressed', String(b.dataset.tool === id));
+  cv.style.touchAction = TOOL[id].paint ? 'none' : 'manipulation';
+  showToolHint();
+}
+
+let hudCache = {};
+function setText(id, txt) { if (hudCache[id] !== txt) { hudCache[id] = txt; $(id).textContent = txt; } }
+function hud() {
+  setText('sMoney', fmt(S.money));
+  $('sMoney').classList.toggle('neg', S.money < 0);
+  setText('sVis', `${V.length} · ${S.totalVisitors.toLocaleString('fr-FR')} au total`);
+  $('sStarsFg').style.width = (stars / 5 * 100) + '%';
+  $('sStars').setAttribute('aria-label', `Note : ${stars} étoiles sur 5`);
+  const h = 7 + S.time / DAY * 16, hh = Math.floor(h), mm = Math.floor((h - hh) * 6) * 10;
+  setText('sDay', `${S.day} · ${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`);
+  for (const b of document.querySelectorAll('.tool')) {
+    const tl = TOOL[b.dataset.tool];
+    b.classList.toggle('poor', tl.cost > S.money);
+  }
+}
+
+let insKey = '';
+function inspect() {
+  const d = selected && selected.kind === 'dino' ? S.dinos.find(o => o.id === selected.id) : null;
+  if (selected && selected.kind === 'dino' && !d) selected = null;
+  const key = d ? 'd' + d.id + (sellArmed ? 's' : '') : selected ? 't' + selected.x + ',' + selected.y + ':' + get(selected.x, selected.y) : 'p';
+  if (key !== insKey) {
+    insKey = key;
+    if (d) {
+      const sp = SPECIES[d.sp], sell = Math.round(sp.price / 2);
+      insEl.innerHTML = `
+        <div class="ins-title"><span data-f="name"></span><span class="pill" data-f="status"></span></div>
+        <div class="ins-sub">${sp.name} · ${sp.diet === 'h' ? 'herbivore' : 'carnivore'} · attrait ${sp.appeal}</div>
+        <div class="bar"><span>Faim</span><div class="track"><i data-f="hunger"></i></div><span class="num" data-f="hn"></span></div>
+        <div class="bar"><span>Santé</span><div class="track"><i data-f="health"></i></div><span class="num" data-f="hp"></span></div>
+        <dl class="kv"><dt>Enclos</dt><dd data-f="pen"></dd><dt>Repas</dt><dd data-f="food"></dd><dt>Entretien</dt><dd>${fmt(sp.upkeep)} par jour</dd></dl>
+        <div class="row"><button type="button" class="btn" data-act="move">Transférer (150 $)</button>
+        <button type="button" class="btn${sellArmed ? ' danger' : ''}" data-act="sell">${sellArmed ? 'Confirmer la vente' : 'Vendre (+' + fmt(sell) + ')'}</button></div>`;
+      insEl.querySelector('[data-f=name]').textContent = d.name;
+    } else if (selected) {
+      const t = get(selected.x, selected.y), info = TILE_INFO[t];
+      if (!info) { selected = null; insKey = ''; return inspect(); }
+      insEl.innerHTML = `<div class="ins-title">${info[0]}</div><p class="ins-sub">${info[1]}</p>
+        <dl class="kv">${BUILD_COST[t] ? `<dt>Prix</dt><dd>${fmt(BUILD_COST[t])}</dd>` : ''}${UPKEEP[t] ? `<dt>Entretien</dt><dd>${fmt(UPKEEP[t])} par jour</dd>` : ''}</dl>`;
+    } else {
+      insEl.innerHTML = `<p class="ins-sub" style="margin-top:0">Cliquez sur un dinosaure ou un bâtiment avec l’outil Inspecter.</p>
+        <dl class="kv"><dt>Dinosaures</dt><dd data-f="pd"></dd><dt>Évadés</dt><dd data-f="pe"></dd><dt>Espèces visibles</dt><dd data-f="ps"></dd>
+        <dt>Aujourd’hui</dt><dd data-f="pt"></dd><dt>Hier</dt><dd data-f="py"></dd><dt>Entretien</dt><dd data-f="pu"></dd></dl>`;
+    }
+  }
+  const f = k => insEl.querySelector(`[data-f=${k}]`);
+  if (d) {
+    const sp = SPECIES[d.sp], esc = escaped(d), r = regionOf(d);
+    const [txt, cls] = esc ? ['En liberté !', 'bad'] : d.state === 'hunt' ? ['Chasse', 'bad'] : d.state === 'eat' ? ['Mange', 'ok']
+      : d.hunger > 75 ? ['Affamé', 'warn'] : ['Au calme', 'ok'];
+    const st = f('status'); st.textContent = txt; st.className = 'pill ' + cls;
+    f('hunger').style.width = d.hunger + '%'; f('hunger').classList.toggle('hi', d.hunger > 70);
+    f('hn').textContent = Math.round(d.hunger);
+    f('health').style.width = Math.max(0, d.health) + '%'; f('health').classList.toggle('hi', d.health < 40);
+    f('hp').textContent = Math.round(Math.max(0, d.health));
+    const pen = f('pen');
+    if (esc) { pen.textContent = 'Ouvert sur les allées !'; pen.className = 'bad'; }
+    else if (r) {
+      const crowded = r.load > r.size;
+      pen.textContent = `${r.size} cases${crowded ? ' · trop petit !' : ''}`; pen.className = crowded ? 'bad' : '';
+    }
+    const food = f('food'), has = r && (sp.diet === 'h' ? r.feedH : r.feedC);
+    food.textContent = has ? (sp.diet === 'h' ? 'Mangeoire végétale ✓' : 'Mangeoire à viande ✓') : (sp.diet === 'h' ? 'Aucune mangeoire végétale !' : 'Pas de viande : il va chasser');
+    food.className = has ? '' : 'bad';
+  } else if (!selected) {
+    let up = 0;
+    for (const o of S.dinos) up += SPECIES[o.sp].upkeep;
+    for (const t of S.map) up += UPKEEP[t] || 0;
+    f('pd').textContent = S.dinos.length;
+    const ne = S.dinos.filter(escaped).length;
+    f('pe').textContent = ne; f('pe').className = ne ? 'bad' : '';
+    f('ps').textContent = visibleSpecies;
+    f('pt').textContent = `+${fmt(S.todayIn)} / −${fmt(S.todayOut)}`;
+    f('py').textContent = S.yesterday ? `+${fmt(S.yesterday.in)} / −${fmt(S.yesterday.out)}` : '—';
+    f('pu').textContent = `${fmt(up)} par jour`;
+  }
+}
+insEl.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]');
+  if (!b || !selected || selected.kind !== 'dino') return;
+  const d = S.dinos.find(o => o.id === selected.id);
+  if (!d) return;
+  if (b.dataset.act === 'move') {
+    setTool('move'); moving = d.id;
+    flash(`Choisissez la nouvelle place de ${d.name}.`, true);
+  } else if (b.dataset.act === 'sell') {
+    if (!sellArmed) { sellArmed = true; return; }
+    const v = Math.round(SPECIES[d.sp].price / 2);
+    S.money += v; logMsg(`${cap(dinoLabel(d))} a été vendu à un autre parc (+${fmt(v)}).`, 'info');
+    removeDino(d); sellArmed = false;
+  }
+});
+
+function renderGoals() {
+  $('goals').innerHTML = GOALS.map(g => {
+    const done = !!S.goals[g.id], [a, b] = g.p();
+    const prog = done ? `jour ${S.goals[g.id]}` : g.id === 'm50' ? `${Math.max(0, Math.round(a / 1000))} k / 50 k` : `${Math.min(a, b)} / ${b}`;
+    return `<li class="${done ? 'done' : ''}"><span class="box"></span><span class="gt">${g.t}</span><span class="gp">${prog}</span></li>`;
+  }).join('');
+}
+function renderLog() {
+  const ol = $('log'); ol.textContent = '';
+  for (const e of S.log.slice(0, 8)) {
+    const li = document.createElement('li'); li.className = e.k;
+    const d = document.createElement('span'); d.className = 'd'; d.textContent = 'J' + e.d;
+    const m = document.createElement('span'); m.className = 'm'; m.textContent = e.m;
+    li.append(d, m); ol.append(li);
+  }
+}
+
+// ---------- Input ----------
+let painting = false, lastPaint = null;
+function evPos(e) {
+  const r = cv.getBoundingClientRect();
+  const fx = (e.clientX - r.left) / r.width * W, fy = (e.clientY - r.top) / r.height * H;
+  return { fx, fy, x: Math.floor(fx), y: Math.floor(fy) };
+}
+cv.addEventListener('pointerdown', e => {
+  const p = evPos(e); hover = p;
+  applyTool(p.x, p.y, p.fx, p.fy, false);
+  if (TOOL[tool].paint) { painting = true; lastPaint = p; try { cv.setPointerCapture(e.pointerId); } catch (_) {} }
+});
+cv.addEventListener('pointermove', e => {
+  const p = evPos(e); hover = inb(p.x, p.y) ? p : null;
+  if (!painting || !hover || (lastPaint && lastPaint.x === p.x && lastPaint.y === p.y)) return;
+  // walk the line from the last painted tile so fast drags leave no gaps
+  let x0 = lastPaint.x, y0 = lastPaint.y;
+  const dx = Math.abs(p.x - x0), dy = -Math.abs(p.y - y0), sx = x0 < p.x ? 1 : -1, sy = y0 < p.y ? 1 : -1;
+  let err = dx + dy;
+  while (!(x0 === p.x && y0 === p.y)) {
+    const e2 = 2 * err;
+    if (e2 >= dy) { err += dy; x0 += sx; } else { err += dx; y0 += sy; }
+    applyTool(x0, y0, x0 + .5, y0 + .5, true);
+  }
+  lastPaint = p;
+});
+const endPaint = () => { painting = false; lastPaint = null; };
+cv.addEventListener('pointerup', endPaint);
+cv.addEventListener('pointercancel', endPaint);
+cv.addEventListener('pointerleave', () => { if (!painting) hover = null; });
+document.addEventListener('keydown', e => { if (e.key === 'Escape') setTool('select'); });
+
+function setSpeed(s) {
+  speed = s;
+  for (const b of document.querySelectorAll('.speed button')) b.setAttribute('aria-pressed', String(+b.dataset.speed === s));
+}
+for (const b of document.querySelectorAll('.speed button')) b.addEventListener('click', () => setSpeed(+b.dataset.speed));
+
+let ngArmed = 0;
+$('newGame').addEventListener('click', () => {
+  const b = $('newGame');
+  if (performance.now() - ngArmed > 3000) { ngArmed = performance.now(); b.textContent = 'Effacer le parc ? Cliquez encore'; b.classList.add('danger'); return; }
+  ngArmed = 0; b.textContent = 'Nouvelle partie'; b.classList.remove('danger');
+  newGame(); save(); insKey = ''; logDirty = true; goalsDirty = true;
+});
+
+// ---------- Save / load ----------
+function serialize() {
+  return { ...S, map: Array.from(S.map), dinos: S.dinos.map(d => ({ id: d.id, sp: d.sp, name: d.name, tx: d.tx, ty: d.ty, hunger: d.hunger, health: d.health })) };
+}
+function restore(o) {
+  if (!o || o.v !== 1 || !Array.isArray(o.map) || o.map.length !== W * H) return false;
+  S = { ...o, map: Uint8Array.from(o.map), dinos: [] };
+  rebuild();
+  for (const d of o.dinos || []) {
+    if (!SPECIES[d.sp] || !inb(d.tx, d.ty)) continue;
+    const nd = addDino(d.sp, d.tx, d.ty, d.name);
+    nd.id = d.id; nd.hunger = d.hunger; nd.health = d.health;
+  }
+  return true;
+}
+function save() { try { localStorage.setItem(SAVE_KEY, JSON.stringify(serialize())); } catch (_) {} }
+function loadLocal() { try { return JSON.parse(localStorage.getItem(SAVE_KEY) || 'null'); } catch (_) { return null; } }
+window.addEventListener('pagehide', save);
+setInterval(() => { if (S) save(); }, 20000);
+
+// ---------- Main loop ----------
+let last = performance.now(), acc = 0, uiAcc = 0;
+function frame(now) {
+  const real = Math.min(.25, (now - last) / 1000); last = now;
+  acc += real * speed;
+  const STEP = 1 / 30;
+  let n = 0;
+  while (acc >= STEP && n < 200) { sim(STEP); acc -= STEP; n++; }
+  if (n >= 200) acc = 0;
+  render(now);
+  hud();
+  uiAcc += real;
+  if (uiAcc > .25) {
+    uiAcc = 0; inspect(); showToolHint();
+    if (logDirty) { logDirty = false; renderLog(); }
+    if (goalsDirty) { goalsDirty = false; renderGoals(); }
+  }
+  requestAnimationFrame(frame);
+}
+
+function start(data) {
+  if (!(data && restore(data)) && !restore(loadLocal())) newGame();
+  computeRating();
+  buildToolbar(); setTool('select'); setSpeed(1);
+  inspect(); renderLog(); renderGoals();
+  requestAnimationFrame(frame);
+}
+const hot = window.claude && window.claude.hot;
+if (hot && hot.snapshot) hot.snapshot(() => serialize());
+if (hot && hot.ready) hot.ready(start); else start(hot && hot.data ? hot.data : {});
+})();
+</script>
