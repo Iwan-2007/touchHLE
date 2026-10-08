@@ -327,3 +327,16 @@ screenshots with the Read tool and iterate until the result is genuinely good.
   broadcasts the full battle state after each action), the other side only sends its move choice;
   state is re-broadcast on request so dropped messages never desync.
 - Everything degrades gracefully when `claude.use(...)` resolves `null` (offline play stays complete).
+5. **Music** (original, generated live with WebAudio — no audio files): `PC.MUSIC.play(track)` /
+   `PC.MUSIC.stop()` with a smooth cross-fade; tracks: `title` (epic adventure theme for the intro),
+   `park_land` (warm jungle adventure: marimba, light percussion, pads), `park_sea` (calm underwater pads
+   and bells), `park_ice` (glassy bells, slow strings), `battle` (energetic: driving drums, bass ostinato,
+   brass-like stabs, rising tension; a more intense variant when an Alpha or a boss fights), `victory`
+   (short fanfare) and `defeat` (short sad cadence). Separate on/off toggles for music and sound effects in
+   Options (`state.settings.music`), music starts only after a user gesture, volume ducks during roars.
+6. **Battle camera like the reference screenshot**: the player's creature stands in the foreground, large,
+   lower-left, facing right; the enemy stands further back in the arena, smaller, right of centre, facing
+   left (ground shadows and a slight blur/haze for depth). Buttons ATTAQUE (or the 3 moves), SPÉCIALE and
+   CHANGER as big square metal buttons at the bottom, a round pause button bottom-left, side controls
+   (sound, music) on the right edge. SPÉCIALE can also be used immediately by paying 2 dollars (shown above
+   the button with the dollar icon) when its gauge is not full yet.
