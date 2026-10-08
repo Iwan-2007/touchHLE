@@ -33,9 +33,15 @@
 
   // ---------------------------------------------------------------------------
   // Buildings
+  // Coin buildings produce automatically (`produce` = one cycle, then Collecter).
+  // Food buildings must be « Activés »: the player picks one of 3 `orders`
+  // ({name, sec, amount}); shorter orders give more food per minute. `produce`
+  // mirrors the first (shortest) order for fallbacks and market cards.
+  // Every non-special building can be upgraded (levels 1–5, handled by the engine).
   // ---------------------------------------------------------------------------
   DATA.BUILDINGS = {};
-  /** Register a building. xp defaults to ≈ coin cost / 40. */
+  const ORDER_NAMES = ['Petite livraison', 'Livraison moyenne', 'Grosse livraison'];
+  /** Register a building. xp ≈ coin cost / 40. */
   function B(id, park, kind, size, name, level, cost, produce, desc, extra) {
     const coins = (cost && cost.coins) || 0;
     DATA.BUILDINGS[id] = Object.assign({
@@ -46,70 +52,87 @@
       desc,
     }, extra || {});
   }
-  /** Fixed park building (gate, lab, arena): never sold, never bought. */
-  function SPECIAL(id, park, size, name, action, desc) {
-    B(id, park, 'special', size, name, 1, {}, null, desc, { action, fixed: true });
+  /** Coin building: `amount` coins every `sec` seconds. */
+  const SHOP = (id, park, size, name, level, coins, amount, sec, desc) =>
+    B(id, park, 'coins', size, name, level, { coins }, ['coins', amount, sec], desc);
+  /** Food building with 3 delivery orders [[sec, amount] x3]. */
+  function FARM(id, park, size, name, level, coins, orders, desc) {
+    const res = DATA.PARKS[park].food;
+    B(id, park, 'food', size, name, level, { coins }, [res, orders[0][1], orders[0][0]], desc, {
+      orders: orders.map((o, i) => ({ name: ORDER_NAMES[i], sec: o[0], amount: o[1] })),
+    });
   }
+  const DECO = (id, park, size, name, level, coins, desc) => B(id, park, 'deco', size, name, level, { coins }, null, desc);
+  /** Fixed park building (gate, lab, arena, harbor): never sold, never bought. */
+  const SPECIAL = (id, park, size, name, action, desc) => B(id, park, 'special', size, name, 1, {}, null, desc, { action, fixed: true });
 
   // ----- Parc Terrestre -----
   SPECIAL('gate_land', 'land', [3, 2], 'Grande Porte', 'gate', 'L’entrée monumentale du parc. Les visiteurs arrivent par ici !');
   SPECIAL('lab_land', 'land', [3, 3], 'Laboratoire ADN', 'lab', 'Le Dr Morel y décode l’ADN fossile pour recréer des espèces disparues.');
   SPECIAL('arena_land', 'land', [4, 4], 'Arène des Rangers', 'arena', 'Tournois amicaux contre les dresseurs des parcs voisins.');
-  // food (food_land)
-  B('fern_farm', 'land', 'food', [2, 2], 'Ferme de fougères', 1, { coins: 150 }, ['food_land', 50, 30], 'Des fougères tendres qui repoussent en un clin d’œil.');
-  B('fruit_orchard', 'land', 'food', [2, 2], 'Verger tropical', 3, { coins: 1500 }, ['food_land', 300, 120], 'Mangues, goyaves et figues : le dessert préféré des herbivores.');
-  B('meat_market', 'land', 'food', [2, 2], 'Marché aux viandes', 7, { coins: 6000 }, ['food_land', 1000, 300], 'De gros steaks pour les appétits de carnivores.');
+  // food (food_land) — orders: [sec, amount]
+  FARM('fern_farm', 'land', [2, 2], 'Ferme de fougères', 1, 150, [[60, 50], [600, 350], [3600, 1500]], 'Des fougères tendres qui repoussent en un clin d’œil.');
+  FARM('fruit_orchard', 'land', [2, 2], 'Verger tropical', 3, 1500, [[120, 200], [900, 1100], [7200, 5400]], 'Mangues, goyaves et figues : le dessert préféré des herbivores.');
+  FARM('meat_market', 'land', [2, 2], 'Marché aux viandes', 7, 5000, [[300, 750], [1800, 3000], [7200, 8400]], 'De gros steaks pour les appétits de carnivores.');
+  FARM('crops_harbor', 'land', [3, 3], 'Port des récoltes', 9, 12000, [[600, 2400], [3600, 9000], [14400, 24000]], 'Un cargo, des grues et des conteneurs pleins de nourriture fraîche.');
   // coins
-  B('souvenir_shop', 'land', 'coins', [2, 2], 'Boutique de souvenirs', 1, { coins: 300 }, ['coins', 40, 40], 'Peluches, casquettes et cartes postales de dinosaures.');
-  B('snack_bar', 'land', 'coins', [2, 2], 'Snack du Volcan', 2, { coins: 1000 }, ['coins', 160, 120], 'Glaces à la lave (à la fraise) et frites croustillantes.');
-  B('restaurant', 'land', 'coins', [2, 2], 'Restaurant Fossile', 4, { coins: 3500 }, ['coins', 500, 240], 'On y déguste le fameux burger « Tricé-Ratatouille ».');
-  B('observation_tower', 'land', 'coins', [2, 2], 'Tour d’observation', 6, { coins: 7000 }, ['coins', 900, 300], 'Une vue imprenable sur tout le parc, jumelles comprises.');
-  B('hotel', 'land', 'coins', [3, 3], 'Hôtel Fougère', 8, { coins: 14000 }, ['coins', 2200, 480], 'Des chambres avec vue sur les enclos. Réveil garanti par les rugissements !');
-  B('cinema', 'land', 'coins', [3, 3], 'Cinéma Préhisto', 11, { coins: 28000 }, ['coins', 4000, 600], 'Un film en relief où les dinosaures sortent presque de l’écran.');
+  SHOP('souvenir_shop', 'land', [2, 2], 'Boutique de souvenirs', 1, 300, 25, 30, 'Peluches, casquettes et cartes postales de dinosaures.');
+  SHOP('snack_bar', 'land', [2, 2], 'Snack du Volcan', 2, 1000, 140, 120, 'Glaces à la lave (à la fraise) et frites croustillantes.');
+  SHOP('restaurant', 'land', [2, 2], 'Restaurant Fossile', 4, 3000, 400, 240, 'On y déguste le fameux burger « Tricé-Ratatouille ».');
+  SHOP('observation_tower', 'land', [2, 2], 'Tour d’observation', 6, 6000, 650, 300, 'Une vue imprenable sur tout le parc, jumelles comprises.');
+  SHOP('hotel', 'land', [3, 3], 'Hôtel Fougère', 8, 14000, 2400, 480, 'Des chambres avec vue sur les enclos. Réveil garanti par les rugissements !');
+  SHOP('cinema', 'land', [3, 3], 'Cinéma Préhisto', 11, 30000, 4500, 600, 'Un film en relief où les dinosaures sortent presque de l’écran.');
   // deco
-  B('palm', 'land', 'deco', [1, 1], 'Palmier', 1, { coins: 100 }, null, 'Un palmier qui donne de l’ombre aux visiteurs.');
-  B('flowers', 'land', 'deco', [1, 1], 'Massif de fleurs', 1, { coins: 60 }, null, 'Des fleurs tropicales aux couleurs éclatantes.');
-  B('torch', 'land', 'deco', [1, 1], 'Torche', 2, { coins: 150 }, null, 'Une torche en bambou qui éclaire les allées le soir.');
-  B('volcano_rock', 'land', 'deco', [1, 1], 'Rocher volcanique', 3, { coins: 300 }, null, 'Un rocher de lave refroidie, encore un peu tiède.');
-  B('safari_jeep', 'land', 'deco', [1, 1], 'Jeep de safari', 5, { coins: 800 }, null, 'La jeep des rangers, prête pour l’aventure.');
-  B('fountain', 'land', 'deco', [2, 2], 'Fontaine aux fougères', 4, { coins: 1200 }, null, 'Une fontaine rafraîchissante au milieu des fougères.');
-  B('statue_rex', 'land', 'deco', [2, 2], 'Statue du roi des dinos', 9, { coins: 5000 }, null, 'Une statue géante de Tyrannosaure. Les photos y sont obligatoires !');
+  DECO('palm', 'land', [1, 1], 'Palmier', 1, 100, 'Un palmier qui donne de l’ombre aux visiteurs.');
+  DECO('flowers', 'land', [1, 1], 'Massif de fleurs', 1, 60, 'Des fleurs tropicales aux couleurs éclatantes.');
+  DECO('torch', 'land', [1, 1], 'Torche', 2, 150, 'Une torche en bambou qui éclaire les allées le soir.');
+  DECO('volcano_rock', 'land', [1, 1], 'Rocher volcanique', 3, 300, 'Un rocher de lave refroidie, encore un peu tiède.');
+  DECO('safari_jeep', 'land', [1, 1], 'Jeep de safari', 5, 800, 'La jeep des rangers, prête pour l’aventure.');
+  DECO('fountain', 'land', [2, 2], 'Fontaine aux fougères', 4, 1200, 'Une fontaine rafraîchissante au milieu des fougères.');
+  DECO('statue_rex', 'land', [2, 2], 'Statue du roi des dinos', 9, 5000, 'Une statue géante de Tyrannosaure. Les photos y sont obligatoires !');
   // road
   B('road_land', 'land', 'road', [1, 1], 'Allée pavée', 1, { coins: 10 }, null, 'Une allée en pierres pour guider les visiteurs.');
 
   // ----- Parc Aquatique -----
   SPECIAL('gate_sea', 'sea', [3, 2], 'Porte du Lagon', 'gate', 'Une arche de corail qui accueille les visiteurs du lagon.');
   SPECIAL('lab_sea', 'sea', [3, 3], 'Laboratoire marin', 'lab', 'Inès y étudie l’ADN des géants des mers.');
-  SPECIAL('arena_sea', 'sea', [4, 4], 'Arène du Récif', 'arena', 'Un bassin de combat entouré de gradins sous-marins.');
-  B('fish_farm', 'sea', 'food', [2, 2], 'Ferme à poissons', 5, { coins: 500 }, ['food_sea', 90, 45], 'Des bancs de sardines bien dodues.');
-  B('krill_net', 'sea', 'food', [2, 2], 'Filets à krill', 7, { coins: 4000 }, ['food_sea', 600, 180], 'Des millions de petites crevettes pour les gros appétits.');
-  B('shell_shop', 'sea', 'coins', [2, 2], 'Boutique de coquillages', 5, { coins: 1500 }, ['coins', 200, 120], 'Colliers de coquillages et dents de requin (fausses, promis).');
-  B('submarine_dock', 'sea', 'coins', [3, 3], 'Port des sous-marins', 6, { coins: 6000 }, ['coins', 900, 300], 'Une balade en sous-marin jaune au milieu des créatures.');
-  B('dome_restaurant', 'sea', 'coins', [3, 3], 'Restaurant sous dôme', 8, { coins: 12000 }, ['coins', 1800, 420], 'On y dîne sous un dôme de verre, au milieu des poissons.');
-  B('aquarium_hotel', 'sea', 'coins', [3, 3], 'Hôtel aquarium', 10, { coins: 22000 }, ['coins', 3300, 600], 'Chaque chambre a une fenêtre sur le grand bleu.');
-  B('coral', 'sea', 'deco', [1, 1], 'Corail', 5, { coins: 120 }, null, 'Un corail rose et orange plein de petits poissons.');
-  B('kelp', 'sea', 'deco', [1, 1], 'Forêt de varech', 5, { coins: 100 }, null, 'De longues algues qui ondulent avec le courant.');
-  B('anchor', 'sea', 'deco', [1, 1], 'Vieille ancre', 6, { coins: 300 }, null, 'L’ancre rouillée d’un navire oublié.');
-  B('treasure_chest', 'sea', 'deco', [1, 1], 'Coffre au trésor', 7, { coins: 900 }, null, 'Il brille encore… mais il est vide. Ou pas ?');
-  B('shipwreck', 'sea', 'deco', [2, 2], 'Épave de galion', 8, { coins: 3000 }, null, 'Un vieux galion englouti, repaire des poissons curieux.');
-  B('ancient_ruins', 'sea', 'deco', [2, 2], 'Ruines englouties', 10, { coins: 6000 }, null, 'Les colonnes d’une cité mystérieuse disparue sous les flots.');
-  B('road_sea', 'sea', 'road', [1, 1], 'Ponton de bois', 5, { coins: 15 }, null, 'Un ponton en planches au-dessus de l’eau claire.');
+  SPECIAL('arena_sea', 'sea', [4, 4], 'Arène du Récif', 'arena', 'Un stade rouge et blanc posé au fond du lagon.');
+  FARM('fish_farm', 'sea', [2, 2], 'Ferme à poissons', 5, 500, [[60, 60], [600, 420], [3600, 1800]], 'Des bancs de sardines bien dodues.');
+  FARM('krill_net', 'sea', [2, 2], 'Filets à krill', 7, 4000, [[300, 600], [1800, 2400], [7200, 7200]], 'Des millions de petites crevettes pour les gros appétits.');
+  SHOP('shell_shop', 'sea', [2, 2], 'Boutique de coquillages', 5, 1500, 180, 120, 'Colliers de coquillages et dents de requin (fausses, promis).');
+  SHOP('submarine_dock', 'sea', [3, 3], 'Port des sous-marins', 6, 6000, 1000, 300, 'Une balade en sous-marin jaune au milieu des créatures.');
+  SHOP('octopus_house', 'sea', [2, 2], 'Maison de la Pieuvre', 7, 9000, 1100, 300, 'Une boutique en forme de pieuvre géante. Huit bras, huit caisses !');
+  SHOP('dome_restaurant', 'sea', [3, 3], 'Restaurant sous dôme', 8, 12000, 2000, 420, 'On y dîne sous un dôme de verre, au milieu des poissons.');
+  SHOP('aquarium_hotel', 'sea', [3, 3], 'Hôtel aquarium', 10, 22000, 3600, 600, 'Chaque chambre a une fenêtre sur le grand bleu.');
+  DECO('coral', 'sea', [1, 1], 'Corail', 5, 120, 'Un corail rose et orange plein de petits poissons.');
+  DECO('kelp', 'sea', [1, 1], 'Forêt de varech', 5, 100, 'De longues algues qui ondulent avec le courant.');
+  DECO('anchor', 'sea', [1, 1], 'Vieille ancre', 6, 300, 'L’ancre rouillée d’un navire oublié.');
+  DECO('treasure_chest', 'sea', [1, 1], 'Coffre au trésor', 7, 900, 'Il brille encore… mais il est vide. Ou pas ?');
+  DECO('shipwreck', 'sea', [2, 2], 'Épave de galion', 8, 3000, 'Un vieux galion englouti, repaire des poissons curieux.');
+  DECO('fossil_skeleton', 'sea', [2, 2], 'Squelette fossile', 9, 4500, 'Le squelette géant d’un ancien monstre marin, à moitié pris dans la roche.');
+  DECO('ancient_ruins', 'sea', [2, 2], 'Ruines englouties', 10, 6000, 'Les colonnes d’une cité mystérieuse disparue sous les flots.');
+  B('road_sea', 'sea', 'road', [1, 1], 'Chemin de sable', 5, { coins: 15 }, null, 'Un chemin de sable clair entre les lagons.');
 
   // ----- Parc Glaciaire -----
   SPECIAL('gate_ice', 'ice', [3, 2], 'Porte du Grand Nord', 'gate', 'Une porte en rondins couverte de givre.');
+  SPECIAL('harbor_ice', 'ice', [4, 3], 'Port d’arrivée', 'gate', 'Le quai où accostent les aéroglisseurs, avec ses hangars et son tunnel dans la falaise.');
   SPECIAL('lab_ice', 'ice', [3, 3], 'Laboratoire polaire', 'lab', 'On y réveille l’ADN conservé dans la glace depuis des millénaires.');
   SPECIAL('arena_ice', 'ice', [4, 4], 'Arène de Glace', 'arena', 'Une arène taillée dans un glacier. Attention, ça glisse !');
-  B('hunter_lodge', 'ice', 'food', [2, 2], 'Cabane du pisteur', 10, { coins: 1500 }, ['food_ice', 150, 60], 'Oleg y prépare les réserves de viande pour l’hiver.');
-  B('cold_storage', 'ice', 'food', [2, 2], 'Chambre froide', 12, { coins: 9000 }, ['food_ice', 1200, 300], 'Un immense garde-manger glacé. Pas besoin de frigo ici !');
-  B('fur_shop', 'ice', 'coins', [2, 2], 'Boutique polaire', 10, { coins: 3000 }, ['coins', 400, 120], 'Bonnets à pompon, moufles et écharpes toutes douces.');
-  B('hot_chocolate', 'ice', 'coins', [2, 2], 'Chalet du chocolat chaud', 11, { coins: 8000 }, ['coins', 1200, 300], 'Un chocolat chaud avec une montagne de chantilly.');
-  B('ice_hotel', 'ice', 'coins', [3, 3], 'Hôtel de glace', 13, { coins: 25000 }, ['coins', 4000, 600], 'Des lits sculptés dans la glace… et des couettes très épaisses.');
-  B('snowy_pine', 'ice', 'deco', [1, 1], 'Sapin enneigé', 10, { coins: 150 }, null, 'Un grand sapin poudré de neige.');
-  B('brazier', 'ice', 'deco', [1, 1], 'Brasero', 10, { coins: 250 }, null, 'Un feu crépitant où les visiteurs se réchauffent les mains.');
-  B('snowman', 'ice', 'deco', [1, 1], 'Bonhomme de neige', 11, { coins: 400 }, null, 'Avec une carotte pour le nez, évidemment.');
-  B('ice_crystals', 'ice', 'deco', [1, 1], 'Cristaux de glace', 12, { coins: 700 }, null, 'Des cristaux bleutés qui scintillent au soleil.');
-  B('igloo', 'ice', 'deco', [2, 2], 'Igloo', 12, { coins: 2500 }, null, 'Un igloo douillet où l’on peut faire la sieste.');
-  B('ice_statue', 'ice', 'deco', [2, 2], 'Statue de glace', 14, { coins: 8000 }, null, 'Un Mammouth sculpté dans un bloc de glace géant.');
+  FARM('hunter_lodge', 'ice', [2, 2], 'Cabane du pisteur', 10, 1500, [[120, 200], [900, 1100], [7200, 5400]], 'Oleg y prépare les réserves de viande pour l’hiver.');
+  FARM('cold_storage', 'ice', [2, 2], 'Chambre froide', 12, 8000, [[300, 900], [1800, 3600], [7200, 10800]], 'Un immense garde-manger glacé. Pas besoin de frigo ici !');
+  SHOP('fur_shop', 'ice', [2, 2], 'Boutique polaire', 10, 3000, 300, 120, 'Bonnets à pompon, moufles et écharpes toutes douces.');
+  SHOP('hot_chocolate', 'ice', [2, 2], 'Chalet du chocolat chaud', 11, 8000, 1000, 300, 'Un chocolat chaud avec une montagne de chantilly.');
+  SHOP('visitor_center_ice', 'ice', [3, 3], 'Centre des visiteurs', 12, 16000, 3000, 600, 'Un grand dôme chauffé où l’on découvre les géants de l’ère glaciaire.');
+  SHOP('ice_hotel', 'ice', [3, 3], 'Hôtel de glace', 13, 25000, 4000, 600, 'Des lits sculptés dans la glace… et des couettes très épaisses.');
+  DECO('snowy_pine', 'ice', [1, 1], 'Sapin enneigé', 10, 150, 'Un grand sapin poudré de neige.');
+  DECO('brazier', 'ice', [1, 1], 'Brasero', 10, 250, 'Un feu crépitant où les visiteurs se réchauffent les mains.');
+  DECO('hovercraft', 'ice', [1, 1], 'Aéroglisseur', 10, 600, 'Il file sur la glace comme sur un coussin d’air.');
+  DECO('snowman', 'ice', [1, 1], 'Bonhomme de neige', 11, 400, 'Avec une carotte pour le nez, évidemment.');
+  DECO('snow_tracker', 'ice', [1, 1], 'Chenillette des neiges', 11, 900, 'Le véhicule d’Oleg pour les expéditions dans le blizzard.');
+  DECO('ice_crystals', 'ice', [1, 1], 'Cristaux de glace', 12, 700, 'Des cristaux bleutés qui scintillent au soleil.');
+  DECO('igloo', 'ice', [2, 2], 'Igloo', 12, 2500, 'Un igloo douillet où l’on peut faire la sieste.');
+  DECO('helipad', 'ice', [2, 2], 'Héliport', 13, 3500, 'Une piste d’atterrissage pour les hélicoptères de ravitaillement.');
+  DECO('ice_statue', 'ice', [2, 2], 'Statue de glace', 14, 8000, 'Un Mammouth sculpté dans un bloc de glace géant.');
   B('road_ice', 'ice', 'road', [1, 1], 'Sentier enneigé', 10, { coins: 15 }, null, 'Un sentier damé dans la neige fraîche.');
 
   // ---------------------------------------------------------------------------
@@ -121,9 +144,9 @@
   // XP needed to go from level L to L+1 (index = L). Tuned with a player simulation:
   // level 2 ≈ 3 min, level 5 ≈ 25 min, level 10 ≈ 1 h 45 of active play.
   const XP_TABLE = [0,
-    100, 250, 450, 700, 1000, 1400, 1900, 2500, 3200, // 1..9
-    4000, 4900, 5900, 7000, 8200, 9500, 11000, 12600, 14300, 16100, // 10..19
-    18000, 20000, 22200, 24500, 27000, 29700, 32500, 35500, 38700, 42000, // 20..29
+    300, 500, 800, 1200, 1700, 2300, 3000, 3800, 4700, // 1..9
+    5800, 7000, 8300, 9700, 11200, 12800, 14500, 16300, 18200, 20200, // 10..19
+    22300, 24500, 26800, 29200, 31700, 34300, 37000, 39800, 42700, 45700, // 20..29
   ];
   /** XP needed to go from `level` to `level + 1` (finite even at MAX_PLAYER_LEVEL; the engine caps the level). */
   DATA.xpToNext = function (level) {
@@ -141,7 +164,24 @@
   };
 
   DATA.XP = { feed: 4, collect: 1, creatureLevel: 10, researchAttempt: 20, researchSuccess: 50 };
-  DATA.RESEARCH = { durationSec: { commun: 5, rare: 8, super: 12, legendaire: 18 }, boostCost: { dollars: 5 }, boostChance: 20, maxChance: 95 };
+  // Multi-step DNA research (SPEC §11.8): each attempt costs ceil(research.cost / steps) coins;
+  // a failed attempt can be re-run for retryCost instead of paying coins again.
+  DATA.RESEARCH = {
+    durationSec: { commun: 5, rare: 8, super: 12, legendaire: 18, mythique: 25 },
+    boostCost: { dollars: 5 }, boostChance: 20, maxChance: 95,
+    steps: { commun: 2, rare: 3, super: 4, legendaire: 5, mythique: 6 },
+    retryCost: { dollars: 1 },
+  };
+  // DNA expeditions (SPEC §11.8): one at a time; success = research completed instantly,
+  // failure = « Dernière chance » to buy the amber for buyDollars. cost = coins per expedition.
+  DATA.EXPEDITION = {
+    durationSec: { commun: 60, rare: 120, super: 240, legendaire: 420, mythique: 600 },
+    chance: { commun: 60, rare: 55, super: 45, legendaire: 40, mythique: 35 },
+    cost: { commun: 600, rare: 2500, super: 9000, legendaire: 25000, mythique: 60000 },
+    buyDollars: { commun: 3, rare: 6, super: 12, legendaire: 25, mythique: 40 },
+    vehicle: { land: 'Jeep d’exploration', sea: 'Sous-marin', ice: 'Chenillette des neiges' },
+    promo: { everySec: 1800, durationSec: 300, discount: 0.3 },
+  };
   DATA.SELL_RATIO = 0.25;
   DATA.COIN_CAP_MIN = 60;
   /** Dollar price to finish a timer now: 1 dollar per started minute, min 1. */
@@ -206,7 +246,7 @@
     M('m02', 'land', 'elise', 'Un œuf tout chaud', [
       'Le grand moment est arrivé : notre tout premier œuf !',
       'Achète un Stégosaure ou un Tricératops au MARCHÉ, puis attends qu’il éclose.',
-    ], { type: 'hatch', park: 'land', count: 1 }, { food_land: 200, xp: 20 },
+    ], { type: 'own_species', park: 'land', count: 1 }, { food_land: 200, xp: 20 },
     'Il a éclos ! Regarde ce bébé… Il a déjà ton sourire. Enfin, presque.'),
 
     M('m03', 'land', 'elise', 'Des pièces qui brillent', [
@@ -280,8 +320,8 @@
 
     M('m14', 'land', 'elise', 'Les griffes du labo', [
       'Le Vélociraptor est petit, malin et très rapide.',
-      'Termine sa recherche ADN si besoin, puis fais éclore un Vélociraptor.',
-    ], { type: 'hatch', species: 'velociraptor', count: 1 }, { coins: 1500, xp: 60 },
+      'Termine sa recherche ADN, fais éclore un Vélociraptor et nourris-le jusqu’au niveau 3.',
+    ], { type: 'creature_level', species: 'velociraptor', level: 3 }, { coins: 1500, xp: 60 },
     'Regarde-le ! Il nous observe déjà avec ses grands yeux curieux.'),
 
     M('m15', 'land', 'elise', 'Le commerce marche bien', [
@@ -312,7 +352,7 @@
     M('s03', 'sea', 'ines', 'Premier plongeon', [
       'Notre premier pensionnaire marin ! Je te conseille l’Archélon ou l’Ichthyosaure.',
       'Fais éclore une créature dans le Parc Aquatique.',
-    ], { type: 'hatch', park: 'sea', count: 1 }, { food_sea: 300, xp: 50 },
+    ], { type: 'own_species', park: 'sea', count: 1 }, { food_sea: 300, xp: 50 },
     'Il nage déjà comme un champion ! Regarde toutes ces bulles.'),
 
     M('s04', 'sea', 'ines', 'Festin sous la mer', [
@@ -368,7 +408,7 @@
     M('g03', 'ice', 'oleg', 'Sous la neige', [
       'J’ai trouvé un œuf de Dodo. Ou de Mégalocéros. Hm.',
       'Fais éclore une créature dans le Parc Glaciaire.',
-    ], { type: 'hatch', park: 'ice', count: 1 }, { food_ice: 400, xp: 100 },
+    ], { type: 'own_species', park: 'ice', count: 1 }, { food_ice: 400, xp: 100 },
     'Il frissonne. Non… il est content. Je crois.'),
 
     M('g04', 'ice', 'oleg', 'Un peu de chaleur', [
@@ -398,8 +438,8 @@
 
     M('g08', 'ice', 'oleg', 'Dents de sabre', [
       'Le Smilodon. Des canines longues comme ton bras. Hm. Presque.',
-      'Il arrive au niveau 13. Recherche son ADN, puis fais éclore un Smilodon.',
-    ], { type: 'hatch', species: 'smilodon', count: 1 }, { coins: 10000, xp: 300 },
+      'Au niveau 13, recherche son ADN, fais-le éclore et nourris-le jusqu’au niveau 5.',
+    ], { type: 'creature_level', species: 'smilodon', level: 5 }, { coins: 10000, xp: 300 },
     'Il ronronne. Très fort. Ne mets pas ta main devant sa bouche.'),
 
     M('g09', 'ice', 'krane', 'Le Grand Tournoi', [
