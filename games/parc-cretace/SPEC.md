@@ -340,3 +340,8 @@ screenshots with the Read tool and iterate until the result is genuinely good.
    CHANGER as big square metal buttons at the bottom, a round pause button bottom-left, side controls
    (sound, music) on the right edge. SPÉCIALE can also be used immediately by paying 2 dollars (shown above
    the button with the dollar icon) when its gauge is not full yet.
+- **Swappable network layer**: all online code goes through `PC.NET` (`available()`, `me()`,
+  `saveTeam()`, `listTeams()`, `reportResult()`, `lobby()`, `challenge()`, `duel` messaging). First
+  backend: claude.ai capabilities (`db`/`room`/`user`). The player plans to host the game publicly later
+  (e.g. GitHub Pages for the static files + Firebase/Supabase or a small Node WebSocket server), so no
+  game code may call `claude.use` directly — only the claude.ai backend of `PC.NET` does.
