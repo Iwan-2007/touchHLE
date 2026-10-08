@@ -51,7 +51,7 @@
   const SPECIAL_COST = { dollars: 2 };
   const TIER_NAMES = ['', 'Bronze', 'Argent', 'Or'];
   const TIER_COLORS = ['', '#d08a4a', '#cfd6dc', '#ffd23a'];
-  const TIER_MULT = [0, 1, 1.5, 2.25];   // reward preview only when the engine has no battleReward()
+  const TIER_MULT = [0, 1, 1.5, 2.2];    // reward preview fallback when PC.DATA.MEDALS is missing
 
   const MOVE_NAMES = {
     bite: 'Morsure', claw: 'Coup de griffe', charge: 'Charge', tail: 'Coup de queue', stomp: 'Piétinement',
@@ -147,10 +147,12 @@
     }
     const st = stageDef(park, n);
     if (!st) return {};
-    const first = medalOf(park, n) < tier, m = TIER_MULT[tier] || 1, r = {};
+    const M = (PC.DATA && PC.DATA.MEDALS) || {};
+    const mult = (M.rewardMult && M.rewardMult[tier - 1]) || TIER_MULT[tier] || 1, replay = M.replayCoins != null ? M.replayCoins : 0.3;
+    const first = medalOf(park, n) < tier, r = {};
     for (const k in st.reward) {
-      if (first) r[k] = Math.round(st.reward[k] * m);
-      else if (k === 'coins') r[k] = Math.round(st.reward[k] * m * 0.3);
+      if (first) r[k] = Math.round(st.reward[k] * mult);
+      else if (k === 'coins') r[k] = Math.round(st.reward[k] * mult * replay);
     }
     return r;
   }
@@ -167,13 +169,14 @@
 .bt-screen{position:absolute;inset:0;display:flex;flex-direction:column;min-height:0}
 .bt-hidden{display:none!important}
 .bt-steel{background:
-  radial-gradient(circle,#f6f8f9 0 1.4px,#59636a 1.9px 2.8px,transparent 3.3px) 5px 5px/9px 9px no-repeat,
+  radial-gradient(circle,#f6f8f9 0 1.4px,#59636a 1.9px 2.8px,transparent 3.3px) left 5px top 5px/9px 9px no-repeat,
   radial-gradient(circle,#f6f8f9 0 1.4px,#59636a 1.9px 2.8px,transparent 3.3px) right 5px top 5px/9px 9px no-repeat,
-  radial-gradient(circle,#f6f8f9 0 1.4px,#59636a 1.9px 2.8px,transparent 3.3px) 5px bottom 5px/9px 9px no-repeat,
+  radial-gradient(circle,#f6f8f9 0 1.4px,#59636a 1.9px 2.8px,transparent 3.3px) left 5px bottom 5px/9px 9px no-repeat,
   radial-gradient(circle,#f6f8f9 0 1.4px,#59636a 1.9px 2.8px,transparent 3.3px) right 5px bottom 5px/9px 9px no-repeat,
   repeating-linear-gradient(90deg,rgba(255,255,255,.06) 0 1px,rgba(0,0,0,.035) 1px 3px),
   linear-gradient(180deg,#e6eaed 0%,#b5bdc3 46%,#959ea5 54%,#cdd3d7 100%);
   border:2px solid #343c42;box-shadow:inset 0 1px 0 rgba(255,255,255,.85),inset 0 -2px 0 rgba(0,0,0,.22),0 4px 10px rgba(0,0,0,.45)}
+button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06) 0 1px,rgba(0,0,0,.035) 1px 3px),linear-gradient(180deg,#eef1f3 0%,#c2c9ce 46%,#a2abb2 54%,#d6dbde 100%)}
 .bt-dark{background:linear-gradient(180deg,#262f35,#171d21);border:2px solid #0a0d0f;box-shadow:inset 0 0 0 1px rgba(255,255,255,.07),inset 0 8px 18px rgba(0,0,0,.35)}
 .bt-hazard{background:repeating-linear-gradient(-45deg,#f5c518 0 10px,#1b1b1b 10px 20px)}
 .bt-close{position:relative;flex:none;width:44px;height:44px;border-radius:50%;
@@ -337,7 +340,7 @@
 .bt-act:disabled{filter:grayscale(.85) brightness(.7)}
 .bt-act .bt-eff{position:absolute;left:3px;top:3px;font-size:10px;font-weight:900;padding:0 4px;border-radius:5px;background:#2f8a1c;color:#fff}
 .bt-act .bt-eff.w{background:#a01c12}
-.bt-sp{background:linear-gradient(180deg,#58606a,#2b3036);border-color:#111}
+.bt-act.bt-sp{background:linear-gradient(180deg,#58606a,#2b3036);border-color:#111}
 .bt-sp em{color:#fff;text-shadow:0 1px 0 #000}
 .bt-sp .fill{position:absolute;left:3px;right:3px;bottom:3px;border-radius:8px;background:linear-gradient(0deg,rgba(255,120,30,.85),rgba(255,210,60,.55));transition:height .35s;pointer-events:none}
 .bt-sp img,.bt-sp em{position:relative}
@@ -361,7 +364,7 @@
 @keyframes bt-glow2{from{box-shadow:0 0 4px #9cf06a}to{box-shadow:0 0 14px 4px #9cf06a}}
 .bt-flee{width:56px;height:30px;border-radius:15px;font-size:12px;align-self:flex-end}
 .bt-msg{position:absolute;left:50%;bottom:118px;transform:translateX(-50%);padding:6px 14px;border-radius:10px;background:rgba(10,14,16,.85);border:2px solid #f5c518;
-  font-weight:800;font-size:15px;white-space:nowrap;z-index:4;pointer-events:none;transition:opacity .3s}
+  font-weight:800;font-size:15px;width:max-content;max-width:calc(100% - 24px);text-align:center;z-index:4;pointer-events:none;transition:opacity .3s}
 .bt-modal{position:absolute;inset:0;z-index:10;display:flex;align-items:center;justify-content:center;padding:14px;background:rgba(4,6,8,.55)}
 .bt-box{position:relative;width:min(460px,100%);max-height:100%;overflow-y:auto;border-radius:16px;padding:16px 16px 14px;text-align:center}
 .bt-box h2{margin:0 0 4px;font-family:${FD};font-weight:400;font-size:30px;color:#ffd23a;text-shadow:0 3px 0 #000,0 0 12px rgba(0,0,0,.6)}
@@ -1745,7 +1748,7 @@
   }
   function layoutFighters(F) {
     const L = F.L, pt = L.portrait;
-    const boxP = [L.W * (pt ? 0.62 : 0.36), L.H * (pt ? 0.34 : 0.44)];
+    const boxP = [L.W * (pt ? 0.76 : 0.36), L.H * (pt ? 0.32 : 0.44)];
     const boxE = [L.W * (pt ? 0.4 : 0.24), L.H * (pt ? 0.2 : 0.26)];
     for (const f of F.P) { f.home = { x: L.px, y: L.yFront }; f.scale = fitScale(f, boxP[0], boxP[1]); }
     for (const f of F.E) { f.home = { x: L.ex, y: L.yBack }; f.scale = fitScale(f, boxE[0], boxE[1]); }
@@ -1895,7 +1898,7 @@
         if (v.trailT <= 0) {
           v.trailT = 0.03;
           const p = fPos(F, f);
-          v.ghosts.push({ x: p.x, y: p.y - v.hop, s: p.s, pose: v.pose, k: v.k, sx: v.sx, sy: v.sy, tilt: v.tilt, a: v.trailAdd ? 0.75 : 0.42, col: v.trailCol, add: v.trailAdd, move: v.move, power: v.power });
+          v.ghosts.push({ x: p.x, y: p.y - v.hop, s: p.s, pose: v.pose, k: v.k, sx: v.sx, sy: v.sy, tilt: v.tilt, a: v.trailAdd ? 0.5 : 0.42, col: v.trailCol, add: v.trailAdd, move: v.move, power: v.power });
           if (v.ghosts.length > 7) v.ghosts.shift();
         }
       }
@@ -2525,11 +2528,14 @@
     const fp = feetPt(F, D);
     puff(F, fp.x, fp.y, 6, bp.w * 0.3, 1);
     const big = o.special ? 2.2 : res.crit ? 1.55 : 1.15;
-    addText(F, bp.x, bp.y - bp.h * 0.2, '-' + fmt(res.dmg), {
+    const nLab = (res.crit ? 1 : 0) + (res.cm !== 1 ? 1 : 0);
+    const minY = (F.L.H * 0.16 + 24 - F.L.H / 2) / F.cam.z + F.cam.y + textSize(F, 0.9) * nLab + textSize(F, big) * 0.6;
+    const ny = Math.max(bp.y - bp.h * 0.2, minY);
+    addText(F, bp.x, ny, '-' + fmt(res.dmg), {
       size: big, col: o.special ? SPECIALS[A.cls].glow : res.crit ? '#ffa21c' : '#fff3b0', stroke: o.special ? '#1a0505' : '#2a1204',
       rise: 70, max: o.special ? 1.7 : 1.35, rot: rand(-0.08, 0.08),
     });
-    let ly = bp.y - bp.h * 0.2 - textSize(F, big) * 1.05;
+    let ly = ny - textSize(F, big) * 1.05;
     if (res.crit) { addText(F, bp.x, ly, 'CRITIQUE !', { size: 0.95, col: '#ff7a1c', stroke: '#2a0a00', rise: 50, max: 1.4, jitter: 0.6 }); ly -= textSize(F, 0.95); }
     if (res.cm > 1) addText(F, bp.x, ly, 'Super efficace !', { size: 0.75, col: '#8cff5a', stroke: '#0c2a06', rise: 44, max: 1.5 });
     else if (res.cm < 1) addText(F, bp.x, ly, 'Peu efficace…', { size: 0.7, col: '#a8c4dc', stroke: '#14202a', rise: 40, max: 1.5 });
@@ -3014,7 +3020,8 @@
     } catch (e) {
       if (e === STOP) {
         if (F.aborted && !F.dead) {                                    // « Abandonner » during an animation
-          F.aborted = false; F.tweens = []; F.timeScale = 1; F.cine = false;
+          F.aborted = false; F.tweens = []; F.timeScale = 1; F.cine = false; F.vs = null;
+          F.ui.scr.classList.remove('cine', 'intro');
           Object.assign(F.fxs, { dim: 0, bars: 0, tint: 0, speed: 0 });
           Object.assign(F.cam, { x: F.L.W / 2, y: F.L.H / 2, z: 1 });
           finishFight(F, false, true).catch(err => { if (err !== STOP) console.error('battle', err); });

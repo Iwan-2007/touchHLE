@@ -40,7 +40,7 @@
         const v = a[k];
         if (v == null || v === false) continue;
         if (k === 'class') n.className += (n.className ? ' ' : '') + v;
-        else if (k === 'style' && typeof v === 'object') Object.assign(n.style, v);
+        else if (k === 'style' && typeof v === 'object') { for (const sk in v) { if (sk.slice(0, 2) === '--') n.style.setProperty(sk, v[sk]); else n.style[sk] = v[sk]; } }
         else if (k.slice(0, 2) === 'on' && typeof v === 'function') n.addEventListener(k.slice(2), v);
         else if (k === 'text') n.textContent = v;
         else if (k === 'html') n.innerHTML = v;
@@ -623,8 +623,8 @@
     // hazard bar + steel plate for « PARK »
     c.save();
     rr(c, 96, 334, 448, 28, 6); c.save(); c.clip();
+    c.fillStyle = '#f6c21b'; c.fillRect(90, 330, 460, 40);
     for (let i = -2; i < 40; i++) { c.beginPath(); c.moveTo(96 + i * 24, 334); c.lineTo(96 + i * 24 + 12, 334); c.lineTo(96 + i * 24 - 16, 362); c.lineTo(96 + i * 24 - 28, 362); c.closePath(); c.fillStyle = '#1b1b1b'; c.fill(); }
-    c.globalCompositeOperation = 'destination-over'; c.fillStyle = '#f6c21b'; c.fillRect(90, 330, 460, 40);
     c.restore();
     rr(c, 96, 334, 448, 28, 6); c.strokeStyle = '#14181b'; c.lineWidth = 4; c.stroke();
     c.shadowColor = 'rgba(0,0,0,.5)'; c.shadowBlur = 10; c.shadowOffsetY = 4;
@@ -768,7 +768,8 @@
     const ic = kind === 'good' ? 'check' : kind === 'bad' ? null : null;
     const el = h('div.toast.' + (kind === 'good' || kind === 'bad' ? kind : 'info'), ic ? icon(ic, 22) : null, h('span', text));
     r.toasts.append(el);
-    while (r.toasts.children.length > 3) r.toasts.firstChild.remove();
+    const maxToasts = window.innerWidth < 640 ? 2 : 3;
+    while (r.toasts.children.length > maxToasts) r.toasts.firstChild.remove();
     setTimeout(() => { el.classList.add('out'); setTimeout(() => el.remove(), 400); }, kind === 'bad' ? 2600 : 3400);
   };
   const toast = UI.toast;
@@ -800,7 +801,6 @@
     };
     if (o.x !== false) box.append(h('button.xbtn', { 'aria-label': 'Fermer', title: 'Fermer', onclick: () => { sfx('click'); close(null); } }));
     if (o.title) box.append(h('div.ph', h('div.hz'), h('div.pt', o.title), h('div.hz')));
-    if (o.rays) box.append(h('div.rays'));
     box.append(inner);
     if (o.body) inner.append(...[].concat(o.body).filter(Boolean));
     if (o.buttons && o.buttons.length) {
@@ -813,6 +813,7 @@
         },
       }, b.icon ? icon(b.icon, 22) : null, b.label, b.cost ? pricePill(b.cost) : null))));
     }
+    if (o.rays) wrap.append(h('div.rays'));
     wrap.append(box);
     if (o.backdropClose) wrap.addEventListener('click', e => { if (e.target === wrap) close(null); });
     wrap._close = close;
@@ -2230,7 +2231,7 @@
       const st = ecall('creatureStats', o.id) || (PC.statsAt ? Object.assign(PC.statsAt(o.speciesId, o.level || 1), { stage: PC.stageForLevel(o.level || 1), feeds: o.feeds || 0 }) : null);
       const tnow = ecall('now') || Date.now();
       const eggReady = !o.hatched && o.hatchAt != null && o.hatchAt <= tnow;
-      const k = [o.hatched, eggReady, o.level, o.feeds, Math.floor((S() || {}).player[park(sp.park).food] / 50), Math.floor(ecall('pendingCoins', o.id) || 0) > 0].join('|');
+      const k = [o.hatched, eggReady, o.level, o.feeds, Math.floor((((S() || {}).player || {})[park(sp.park).food] || 0) / 50), Math.floor(ecall('pendingCoins', o.id) || 0) > 0].join('|');
       if (k !== key) {
         key = k;
         P.setTitle(o.hatched ? (o.name || sp.name) : 'ŒUF DE ' + sp.name.toUpperCase());
@@ -3084,12 +3085,12 @@
       const ids = e.unlockIds || (e.unlocks || []).map(t2 => ({ text: t2 }));
       if (ids.length) {
         const ul = h('ul.unlocks');
-        for (const u of ids.slice(0, 8)) {
+        for (const u of ids.slice(0, 6)) {
           const img = u.type === 'species' && spdef(u.id) ? h('img', { src: portraitURL(u.id, 48, 48, { stage: 0, bg: false }), alt: '' })
             : icon(u.type === 'park' ? 'parks' : u.type === 'building' ? 'tab_buildings' : 'star', 24);
           ul.append(h('li', img, h('span', u.text)));
         }
-        if (ids.length > 8) ul.append(h('li', h('span', '… et ' + (ids.length - 8) + ' autres nouveautés !')));
+        if (ids.length > 6) ul.append(h('li', h('span', '… et ' + (ids.length - 6) + ' autres nouveautés !')));
         body.push(h('div.rw-label', 'Nouveautés'), ul);
       }
       const m = modal({ cls: 'levelup', rays: true, body, buttons: [{ label: 'SUPER !', icon: 'ok' }], onClose: () => done() });
