@@ -144,9 +144,9 @@
   // XP needed to go from level L to L+1 (index = L). Tuned with a player simulation:
   // level 2 ≈ 3 min, level 5 ≈ 25 min, level 10 ≈ 1 h 45 of active play.
   const XP_TABLE = [0,
-    300, 500, 800, 1200, 1700, 2300, 3000, 3800, 4700, // 1..9
-    5800, 7000, 8300, 9700, 11200, 12800, 14500, 16300, 18200, 20200, // 10..19
-    22300, 24500, 26800, 29200, 31700, 34300, 37000, 39800, 42700, 45700, // 20..29
+    600, 900, 1200, 1500, 1800, 2100, 2500, 2900, 3300, // 1..9
+    4200, 5000, 5800, 6700, 7700, 8800, 10000, 11300, 12700, 14200, // 10..19
+    15800, 17500, 19300, 21200, 23200, 25300, 27500, 29800, 32200, 34700, // 20..29
   ];
   /** XP needed to go from `level` to `level + 1` (finite even at MAX_PLAYER_LEVEL; the engine caps the level). */
   DATA.xpToNext = function (level) {
