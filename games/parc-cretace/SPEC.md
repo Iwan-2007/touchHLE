@@ -317,6 +317,14 @@ screenshots with the Read tool and iterate until the result is genuinely good.
    are green, the current one pulses, locked ones are grey. Engine: `state.battles[park]` stays the highest
    Bronze-cleared stage, plus `state.medals[park][stage] = 0..3`; `recordBattle(park, stage, won, tier)`.
 
+7. **Aquatic park look (reference screenshots)**: deep blue seabed divided into big lots by slightly raised
+   sand paths, lagoon enclosures with dark posts and a star plate, lush coral beds (purple, red, green
+   table corals), kelp, rocks, a giant fossil skeleton half-buried in the rocks, Greek-style ruins, an anchor,
+   a shipwreck, a glass greenhouse dome with green lights, an octopus-shaped building, and the arena as a
+   red-and-white stadium. Underwater battle arena: futuristic cyan-lit dome with gates, light rays, bubbles,
+   the plesiosaur-style creature in the foreground. Add deco `fossil_skeleton` [2,2] and coins building
+   `octopus_house` [2,2] to the sea park.
+
 ## 12. Phase 3 — online battles (artifact runtime capabilities `db`, `room`, `user`)
 
 - **Arène en ligne (asynchrone, `db`)**: each player registers their best team (3 creatures: species,
