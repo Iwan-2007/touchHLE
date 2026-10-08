@@ -238,6 +238,7 @@
   function finishSetup() {
     for (const p of PARKS) {
       ensureFixed(p);
+      syncPositions(p);
       replaceLost(p);
     }
     ensureSide();
@@ -354,6 +355,26 @@
         if (spot) { gx = spot.gx; gy = spot.gy; } else if (!Number.isInteger(gx) || !Number.isInteger(gy)) continue;
       }
       objs.push({ id: nextId(park), type: 'building', buildingId: f.buildingId, gx, gy, w, h, fixed: true });
+    }
+  }
+  /**
+   * After a load: fixed buildings follow the terrain's positions, and player objects standing on
+   * unbuildable or overlapping tiles (e.g. the terrain generator changed since the save) move to a
+   * free spot. An object that finds no room keeps its old position rather than being lost.
+   */
+  function syncPositions(park) {
+    const t = terrain(park), objs = state.parks[park].objects;
+    if (!t.fallback && Array.isArray(t.fixed)) for (const f of t.fixed) {
+      const o = f && objs.find(x => x.fixed && x.buildingId === f.buildingId);
+      if (o && Number.isInteger(f.gx) && Number.isInteger(f.gy)) { o.gx = f.gx; o.gy = f.gy; }
+    }
+    for (const o of objs) {
+      if (o.fixed || !Number.isInteger(o.gx) || !Number.isInteger(o.gy)) continue;
+      if (placeReason(park, o.gx, o.gy, o.w, o.h, o.id) === null) continue;
+      const gx = o.gx, gy = o.gy;
+      o.gx = null; o.gy = null;
+      const spot = findFreeSpot(park, o.w, o.h);
+      if (spot) { o.gx = spot.gx; o.gy = spot.gy; } else { o.gx = gx; o.gy = gy; }
     }
   }
   /** Objects loaded without a valid position get a free spot (or are dropped if the park is full). */
@@ -1478,14 +1499,17 @@
       const topLevel = Math.max(...base.map(e => spdef(e.species).level));
       const avg = Math.round(base.reduce((s, e) => s + e.level, 0) / base.length);
       const order = (PC.SPECIES_ORDER && PC.SPECIES_ORDER[park]) || [];
-      let cands = order.filter(id => spdef(id) && !spdef(id).offerOnly && !list.some(e => e.species === id) && spdef(id).level <= topLevel);
-      if (!cands.length) cands = order.filter(id => spdef(id) && !spdef(id).offerOnly && !list.some(e => e.species === id));
-      cands.sort((a, b) => spdef(b).level - spdef(a).level || order.indexOf(a) - order.indexOf(b));
+      const free = order.filter(id => spdef(id) && !spdef(id).offerOnly && !list.some(e => e.species === id));
+      // Prefer species no more advanced than the stage's own (strongest first, rotated by stage),
+      // then the next easiest ones when the park has too few of them.
+      const near = free.filter(id => spdef(id).level <= topLevel).sort((a, b) => spdef(b).level - spdef(a).level || order.indexOf(a) - order.indexOf(b));
+      const above = free.filter(id => spdef(id).level > topLevel).sort((a, b) => spdef(a).level - spdef(b).level || order.indexOf(a) - order.indexOf(b));
       let k = Math.round(+stage) || 0;
-      while (list.length < want && cands.length) {
-        const pickI = k % Math.min(3, cands.length);
-        list.push({ species: cands[pickI], level: clampInt(avg + bonus, 1, maxL, 1) });
-        cands.splice(pickI, 1);
+      while (list.length < want && (near.length || above.length)) {
+        const src = near.length ? near : above;
+        const pickI = near.length ? k % Math.min(3, near.length) : 0;
+        list.push({ species: src[pickI], level: clampInt(avg + bonus, 1, maxL, 1) });
+        src.splice(pickI, 1);
         k++;
       }
     }
@@ -1512,25 +1536,34 @@
     }
     return out;
   }
+  /** Reward a win of (park, stage, tier) would give now: full tier reward on first clear, else replay coins. */
+  function winReward(st, park, stage, tier) {
+    const M = medCfg();
+    const tierReward = scaleReward(st.reward, num((M.rewardMult || [])[tier - 1], [1, 1.5, 2.2][tier - 1]));
+    if (tier > medal(park, stage)) return { reward: tierReward, first: true };
+    const coins = Math.round((tierReward.coins || 0) * num(M.replayCoins, 0.3));
+    return { reward: coins > 0 ? { coins: niceRound(coins) } : { xp: 5 }, first: false };
+  }
+  /** Preview of the reward for winning a stage at a tier (used by the tournament screen). */
+  function battleReward(park, stage, tier) {
+    const st = stageDef(park, stage);
+    if (!state || !st || !PARKS.includes(park)) return {};
+    return winReward(st, park, Math.round(+stage), clampInt(tier, 1, 3, 1)).reward;
+  }
   /** Record a fight result; returns the reward given (first clear of a tier = full tier reward). */
   function recordBattle(park, stage, won, tier) {
     const st = stageDef(park, stage);
     if (!state || !st || !PARKS.includes(park)) return {};
     stage = Math.round(+stage); tier = clampInt(tier, 1, 3, 1);
     if (!battleUnlocked(park, stage, tier)) return {};
-    const M = medCfg(), prev = medal(park, stage);
+    const M = medCfg();
     let reward, first = false;
     if (won) {
       state.counters.battlesWon[park] = (state.counters.battlesWon[park] || 0) + 1;
-      const tierReward = scaleReward(st.reward, num((M.rewardMult || [])[tier - 1], [1, 1.5, 2.2][tier - 1]));
-      if (tier > prev) {
-        first = true;
-        reward = tierReward;
+      ({ reward, first } = winReward(st, park, stage, tier));
+      if (first) {
         state.medals[park][stage] = tier;
         if (tier === 1) state.battles[park] = Math.max(state.battles[park] || 0, stage);
-      } else {
-        const coins = Math.round((tierReward.coins || 0) * num(M.replayCoins, 0.3));
-        reward = coins > 0 ? { coins: niceRound(coins) } : { xp: 5 };
       }
     } else {
       reward = { xp: Math.max(0, Math.round(num(M.lossXp, 5))) };
@@ -1600,10 +1633,11 @@
       return raw ? JSON.parse(raw) : null;
     } catch (e) { return null; }
   }
-  const cleanCost = c => {
+  /** Valid cost / reward object (resources only, plus xp when `withXp`), or null. */
+  const cleanCost = (c, withXp) => {
     if (!isObj(c)) return null;
     const out = {};
-    for (const k in c) if (RES_KEYS.includes(k) && nonNeg(c[k], 0) > 0) out[k] = Math.round(c[k]);
+    for (const k in c) if ((RES_KEYS.includes(k) || (withXp && k === 'xp')) && nonNeg(c[k], 0) > 0) out[k] = Math.round(c[k]);
     return out;
   };
   function cleanCounters(c) {
@@ -1673,7 +1707,7 @@
       id: String(x.id || 'side_' + Math.random().toString(36).slice(2)), tpl: String(x.tpl || x.goal.type),
       icon: typeof x.icon === 'string' ? x.icon : 'star', npc: typeof x.npc === 'string' ? x.npc : 'tom',
       title: typeof x.title === 'string' ? x.title : 'Mission secondaire', text: typeof x.text === 'string' ? x.text : '',
-      goal: clone(x.goal), reward: cleanCost(x.reward) || {}, base: cleanBase(x.base, counters),
+      goal: clone(x.goal), reward: cleanCost(x.reward, true) || {}, base: cleanBase(x.base, counters),
       done: !!x.done, createdAt: num(x.createdAt, 0),
     };
   }
@@ -1938,7 +1972,7 @@
     goalProgress: [(g, base) => goalProgress(g, base), { progress: 0, target: 1, done: false }],
     // battles
     battleTeam: [battleTeam, []], battleEnemies: [battleEnemies, []], battleUnlocked: [battleUnlocked, false],
-    recordBattle: [recordBattle, {}], medal: [medal, 0],
+    recordBattle: [recordBattle, {}], battleReward: [battleReward, {}], medal: [medal, 0],
     // objects & terrain
     getObj: [getObj, null], objects: [objects, []], findObj: [find, null], getTerrain: [getTerrain, null],
     // cards

@@ -21,11 +21,16 @@
   const HAS_DOC = typeof document !== 'undefined';
 
   // ---------- tuning ----------
-  const LEVEL = { master: 0.9, sfx: 0.78, music: 0.42, sfxRev: 0.13 };
+  const LEVEL = { master: 0.9, sfx: 0.78, music: 0.24, sfxRev: 0.13 };   // music sits well under SFX
   const LOOKAHEAD = 0.16;   // seconds of music scheduled ahead
   const TIMER_MS = 25;      // scheduler period
   const XFADE = 1.5;        // cross-fade between looping tracks
   const EPS = 0.0001;
+  // Lite mode (very small CPUs): one oscillator instead of detuned pairs in pads, strings, brass.
+  let LITE = (function () {
+    try { const n = W.navigator || {}; return n.hardwareConcurrency > 0 && n.hardwareConcurrency <= 2; } catch (e) { return false; }
+  })();
+  const dets = (pair) => (LITE ? [0] : pair);
 
   // ---------- small utils ----------
   const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
@@ -271,13 +276,13 @@
     pad(ac, out, t, ms, dur, v, o) {
       const lp = flt(ac, 'lowpass', (o && o.cut) || 900, 0.5), g = gn(ac, 0, out); lp.connect(g);
       const end = envAHR(g.gain, t, (o && o.attack) || 0.6, v * 0.42 / Math.sqrt(ms.length), dur, (o && o.release) || 0.9);
-      ms.forEach((m) => { osc(ac, 'sawtooth', mtof(m), t, end + 0.03, lp, -9); osc(ac, 'sawtooth', mtof(m), t, end + 0.03, lp, 9); });
+      ms.forEach((m) => { dets([-9, 9]).forEach((d) => osc(ac, 'sawtooth', mtof(m), t, end + 0.03, lp, d)); });
     },
     softpad(ac, out, t, ms, dur, v, o) {
       const lp = flt(ac, 'lowpass', (o && o.cut) || 1500, 0.4), g = gn(ac, 0, out); lp.connect(g);
       const end = envAHR(g.gain, t, (o && o.attack) || 1.2, v * 0.6 / Math.sqrt(ms.length), dur, (o && o.release) || 1.6);
       const lfo = osc(ac, 'sine', 0.35, t, end, null), lg = gn(ac, 450); lfo.connect(lg); lg.connect(lp.frequency);
-      ms.forEach((m) => { osc(ac, 'triangle', mtof(m), t, end + 0.03, lp, -6); osc(ac, 'sawtooth', mtof(m), t, end + 0.03, lp, 7); });
+      ms.forEach((m) => { if (!LITE) osc(ac, 'triangle', mtof(m), t, end + 0.03, lp, -6); osc(ac, 'sawtooth', mtof(m), t, end + 0.03, lp, 7); });
     },
     strings(ac, out, t, ms, dur, v, o) {
       const lp = flt(ac, 'lowpass', (o && o.cut) || 2400, 0.6), hp = flt(ac, 'highpass', 170, 0.7);
@@ -285,13 +290,13 @@
       const end = envAHR(g.gain, t, (o && o.attack) || 0.35, v * 0.4 / Math.sqrt(ms.length), dur, (o && o.release) || 0.7);
       const lfo = osc(ac, 'sine', 5.3, t, end, null), lg = gn(ac, 9); lfo.connect(lg);
       ms.forEach((m) => {
-        [-7, 6].forEach((det) => { const os = osc(ac, 'sawtooth', mtof(m), t, end + 0.03, lp, det); lg.connect(os.detune); });
+        dets([-7, 6]).forEach((det) => { const os = osc(ac, 'sawtooth', mtof(m), t, end + 0.03, lp, det); lg.connect(os.detune); });
       });
     },
     stacc(ac, out, t, m, dur, v) {
       const f = mtof(m), lp = flt(ac, 'lowpass', Math.min(f * 6, 4000), 0.8), g = gn(ac, 0, out); lp.connect(g);
       const end = envAD(g.gain, t, 0.006, v * 0.32, Math.min(0.16, dur + 0.05));
-      osc(ac, 'sawtooth', f, t, end + 0.03, lp, -6); osc(ac, 'sawtooth', f, t, end + 0.03, lp, 6);
+      dets([-6, 6]).forEach((d) => osc(ac, 'sawtooth', f, t, end + 0.03, lp, d));
     },
     choir(ac, out, t, ms, dur, v) {
       const g = gn(ac, 0, out), sum = gn(ac, 1);
@@ -301,10 +306,12 @@
       });
       const lfo = osc(ac, 'sine', 4.8, t, end, null), lg = gn(ac, 13); lfo.connect(lg);
       ms.forEach((m) => {
-        [-11, 10].forEach((det) => { const os = osc(ac, 'sawtooth', mtof(m), t, end + 0.03, sum, det); lg.connect(os.detune); });
+        dets([-11, 10]).forEach((det) => { const os = osc(ac, 'sawtooth', mtof(m), t, end + 0.03, sum, det); lg.connect(os.detune); });
       });
     },
-    brass(ac, out, t, m, dur, v, o) { brassVoice(ac, out, t, m, dur, v, 1, 0.025); },
+    brass(ac, out, t, m, dur, v) { brassVoice(ac, out, t, m, dur, v, 1, 0.025); },
+    // Brass chord stab: all notes share one filter + envelope (much cheaper than one voice per note).
+    stab(ac, out, t, ms, dur, v) { brassVoice(ac, out, t, ms, dur, v, 1, 0.02); },
     horn(ac, out, t, m, dur, v) { brassVoice(ac, out, t, m, dur, v, 0.55, 0.06); },
     lowbrass(ac, out, t, m, dur, v) { brassVoice(ac, out, t, m, dur, v * 1.2, 0.7, 0.04); },
     lead(ac, out, t, m, dur, v) {   // soft flute / ocarina
@@ -356,17 +363,22 @@
       nz(ac, out, t, { type: 'lowpass', f: 500, q: 0.7, d: 0.07, v: v * 0.35 });
     },
   };
-  ['pad', 'softpad', 'strings', 'choir'].forEach((k) => { INST[k].poly = true; });
+  ['pad', 'softpad', 'strings', 'choir', 'stab'].forEach((k) => { INST[k].poly = true; });
 
+  /** Brass: detuned saws with a lip "scoop" and an opening filter. m = midi note or array (chord). */
   function brassVoice(ac, out, t, m, dur, v, bright, att) {
-    const f = mtof(m), g = gn(ac, 0, out), lp = flt(ac, 'lowpass', f, 1.4, g);
+    const ms = Array.isArray(m) ? m : [m];
+    const f = mtof(ms[(ms.length - 1) >> 1]), g = gn(ac, 0, out), lp = flt(ac, 'lowpass', f, 1.4, g);
     lp.frequency.setValueAtTime(f * 1.2, t);
     lp.frequency.linearRampToValueAtTime(Math.min(f * 7 * bright, 12000), t + att + 0.02);
     lp.frequency.exponentialRampToValueAtTime(Math.min(f * 3.2 * bright, 9000), t + att + 0.28);
     const end = envADSR(g.gain, t, att, 0.25, 0.72, v * 0.4, dur, 0.12);
-    [-6, 6].forEach((det) => {
-      const os = osc(ac, 'sawtooth', f * 0.965, t, end + 0.03, lp, det);
-      os.frequency.exponentialRampToValueAtTime(f, t + 0.05);   // little lip "scoop"
+    ms.forEach((mm) => {
+      const fm = mtof(mm);
+      dets([-6, 6]).forEach((det) => {
+        const os = osc(ac, 'sawtooth', fm * 0.965, t, end + 0.03, lp, det);
+        os.frequency.exponentialRampToValueAtTime(fm, t + 0.05);   // little lip "scoop"
+      });
     });
   }
 
@@ -485,7 +497,7 @@
   // the order loops, and voices vary with the loop pass (inst / pattern arrays, `passes`, `mel2`).
   const TRACKS = {
     title: {   // epic adventure theme — D minor with a heroic major lift
-      bpm: 100, loop: true, rev: 0.32,
+      bpm: 100, loop: true, rev: 0.32, gain: 0.9,
       order: ['A', 'A2', 'B', 'B2'],
       sections: {
         A:  { chords: ['Dm', 'Bb', 'F', 'C'],  mel: 'D5 - - A4 D5 - E5 F5 | F5 - - - E5 - D5 - | C5 - - - A4 - C5 - | G4 - - - - - . .' },
@@ -509,7 +521,7 @@
     },
 
     park_land: {   // warm jungle adventure — F major, marimba & kalimba
-      bpm: 104, swing: 0.12, loop: true, rev: 0.22,
+      bpm: 104, swing: 0.12, loop: true, rev: 0.22, gain: 1.15,
       order: ['A', 'A2', 'B', 'B2'],
       sections: {
         A:  { chords: ['F', 'Am', 'Bb', 'C'],  mel: 'F5 - C5 A4 C5 - D5 C5 | A4 - - . E5 - C5 A4 | D5 - Bb4 F4 Bb4 - C5 D5 | E5 - C5 - G4 - . .',
@@ -533,7 +545,7 @@
     },
 
     park_sea: {   // calm underwater — D major 7ths, slow pads, bell arpeggios, bubbles, distant whales
-      bpm: 72, loop: true, rev: 0.5,
+      bpm: 72, loop: true, rev: 0.5, gain: 0.72,
       order: ['A', 'B', 'A2', 'C'],
       sections: {
         A:  { chords: ['Dmaj7', 'Gmaj7', 'Bm7', 'A'],      mel: 'A5 - - - F#5 - E5 - | D5 - - - - - B4 - | D5 - E5 - F#5 - - A5 | E5 - - - - - . .' },
@@ -552,7 +564,7 @@
     },
 
     park_ice: {   // glassy bells, slow strings, sparse — E minor, wind gusts and ice twinkles
-      bpm: 66, loop: true, rev: 0.55,
+      bpm: 66, loop: true, rev: 0.55, gain: 0.85,
       order: ['A', 'B', 'A2', 'B2'],
       sections: {
         A:  { chords: ['Emadd9', 'Cmaj7', 'Am7', 'Bsus4 B'], mel: 'E5 - - - B5 - - - | G5 - - - F#5 - E5 - | C6 - - - B5 - A5 - | F#5 - - - - - - -' },
@@ -570,12 +582,12 @@
       ],
     },
 
-    battle: {   // energetic — E minor, driving drums, bass ostinato, brass stabs, rising C→D→Eb→F build
+    battle: {   // energetic — E minor i–iv–VI–VII, driving drums, bass ostinato, brass stabs, rising C→D→Eb→F build
       bpm: 140, loop: true, rev: 0.14,
       order: ['A', 'A2', 'B', 'C'],
       sections: {
-        A:  { chords: ['Em', 'Em', 'C', 'D'],  mel: 'E5 - . E5 G5 - B5 - | A5 - G5 - F#5 - E5 - | G5 - . G5 E5 - C5 - | D5 - F#5 - A5 - - -' },
-        A2: { chords: ['Em', 'Em', 'C', 'B'],  mel: 'E5 - . E5 G5 - B5 - | C6 - B5 - A5 - G5 - | E5 - . E5 G5 - C6 - | B5 - - - D#5 - F#5 -' },
+        A:  { chords: ['Em', 'Am', 'C', 'D'],  mel: 'E5 - . E5 G5 - B5 - | A5 - G5 - F#5 - E5 - | G5 - . G5 E5 - C5 - | D5 - F#5 - A5 - - -' },
+        A2: { chords: ['Em', 'Am', 'C', 'B'],  mel: 'E5 - . E5 G5 - B5 - | C6 - B5 - A5 - G5 - | E5 - . E5 G5 - C6 - | B5 - - - D#5 - F#5 -' },
         B:  { chords: ['Am', 'Em', 'Am', 'B'], mel: 'A4 - C5 - E5 - . . | B4 - E5 - G5 - . . | C5 - E5 - A5 - G5 - | F#5 - - - D#5 - B4 -', drum: 'half' },
         C:  { chords: ['C', 'D', 'Eb', 'F'],   mel: 'G5 - - - - - - - | A5 - - - - - - - | Bb5 - - - - - - - | C6 - - - A5 - B5 -',
               drum: 'build', ramp: true, riser: true },
@@ -583,7 +595,7 @@
       voices: [
         { id: 'lead', kind: 'mel', inst: 'brass', vel: 0.48 },
         { id: 'lead2', kind: 'mel', inst: 'horn', vel: 0.26, oct: -12, pan: -0.25, passes: [1] },
-        { id: 'stab', kind: 'chord', inst: 'brass', center: 62, rhythm: 'x-.x-.x-....x-..', vel: 0.17, pan: 0.25, mute: ['C'] },
+        { id: 'stab', kind: 'chord', inst: 'stab', center: 62, rhythm: 'x-.x-.x-....x-..', vel: 0.17, pan: 0.25, mute: ['C'] },
         { id: 'str', kind: 'arp', inst: 'stacc', res: 1, base: 52, pat: [0, 1, 2, 1], vel: 0.26, pan: -0.3, only: ['B', 'C'] },
         { id: 'bass', kind: 'bass', inst: 'synbass', base: 36, rhythm: 'R.RRR.RRR.RR8.58', vel: 0.48, rev: 0.03 },
         { id: 'dr', kind: 'drums', vel: 0.62, rev: 0.08, crash: true, sets: {
@@ -610,7 +622,7 @@
         { id: 'lead', kind: 'mel', inst: 'brass', vel: 0.55 },
         { id: 'lead2', kind: 'mel', inst: 'horn', vel: 0.3, oct: -12, pan: -0.2 },
         { id: 'str', kind: 'chord', inst: 'strings', center: 60, vel: 0.3, pan: 0.2 },
-        { id: 'final', kind: 'chord', inst: 'brass', center: 64, rhythm: 'X---------------', vel: 0.26, bars: [2] },
+        { id: 'final', kind: 'chord', inst: 'stab', center: 64, rhythm: 'X---------------', vel: 0.26, bars: [2] },
         { id: 'bass', kind: 'bass', inst: 'lowbrass', base: 36, rhythm: 'R-------R-------', vel: 0.36 },
         { id: 'fx', kind: 'fx', fn: FX.victory, vel: 0.55, rev: 0.35 },
       ],
@@ -635,7 +647,7 @@
   (function () {
     const b = TRACKS.battle;
     TRACKS.battle_boss = {
-      bpm: 158, loop: true, rev: 0.16,
+      bpm: 158, loop: true, rev: 0.16, gain: 0.95,
       order: ['X', 'A', 'X2', 'A2', 'C'],
       sections: {
         X:  { chords: ['Em', 'F', 'Em', 'F'], drum: 'main',
@@ -648,7 +660,7 @@
         { id: 'lead', kind: 'mel', inst: 'brass', vel: 0.48 },
         { id: 'lead2', kind: 'mel', inst: 'horn', vel: 0.3, oct: -12, pan: -0.25 },
         { id: 'choir', kind: 'chord', inst: 'choir', center: 64, vel: 0.2 },
-        { id: 'stab', kind: 'chord', inst: 'brass', center: 58, rhythm: 'X-.x-.x-..x-x-..', vel: 0.17, pan: 0.25, mute: ['C'] },
+        { id: 'stab', kind: 'chord', inst: 'stab', center: 58, rhythm: 'X-.x-.x-..x-x-..', vel: 0.17, pan: 0.25, mute: ['C'] },
         { id: 'str', kind: 'arp', inst: 'stacc', res: 1, base: 52, pat: [0, 1, 0, 2, 0, 1, 0, 3], vel: 0.24, pan: -0.3 },
         { id: 'bass', kind: 'bass', inst: 'distbass', base: 36, rhythm: 'RRR.RRR.RR8.RR5.', vel: 0.48, rev: 0.03 },
         { id: 'dr', kind: 'drums', vel: 0.62, rev: 0.08, crash: true, sets: {
@@ -959,8 +971,9 @@
 
   const S = {
     click(ac, out, t) {
-      tone(ac, out, t, { f: 1250, f2: 820, sw: 0.04, a: 0.001, d: 0.05, v: 0.32 });
-      nz(ac, out, t, { type: 'highpass', f: 4000, d: 0.008, v: 0.12 });
+      tone(ac, out, t, { f: 1250, f2: 820, sw: 0.04, a: 0.001, d: 0.06, v: 0.5 });
+      tone(ac, out, t, { type: 'triangle', f: 620, f2: 480, sw: 0.03, a: 0.001, d: 0.04, v: 0.22 });
+      nz(ac, out, t, { type: 'highpass', f: 4000, d: 0.008, v: 0.16 });
       return 0.08;
     },
     coin(ac, out, t) {
@@ -1083,7 +1096,8 @@
       return 0.4;
     },
     claw(ac, out, t) {
-      for (let i = 0; i < 3; i++) slash(ac, out, t + i * 0.065, 0.45 - i * 0.05);
+      for (let i = 0; i < 3; i++) slash(ac, out, t + i * 0.065, 0.95 - i * 0.12);
+      tone(ac, out, t + 0.14, { f: 170, f2: 70, sw: 0.08, a: 0.002, d: 0.1, v: 0.35 });   // flesh thud
       return 0.4;
     },
     charge(ac, out, t) {
@@ -1140,7 +1154,7 @@
     },
     win(ac, out, t) {
       [60, 64, 67].forEach((m, i) => brassVoice(ac, out, t + i * 0.1, m + 12, 0.08, 0.5, 1, 0.01));
-      [72, 76, 79, 84].forEach((m) => brassVoice(ac, out, t + 0.3, m, 0.8, 0.28, 1, 0.02));
+      brassVoice(ac, out, t + 0.3, [72, 76, 79, 84], 0.8, 0.28, 1, 0.02);
       nz(ac, out, t + 0.3, { type: 'highpass', f: 5000, d: 1.2, v: 0.16 });
       sparkle(ac, out, t + 0.35, 8, 0.8, 0.08);
       return 1.6;
@@ -1245,7 +1259,7 @@
   let G = null;              // live graph
   let failed = false;        // creation failed: stay silent forever
   let sfxOn = true, musicOn = true;
-  let hiddenSuspended = false, resumeAskedAt = -1e9;
+  let hiddenSuspended = false, gestureAt = -1e9;   // time of the last unlock() (user gesture)
   let wanted = null;         // track requested by the game (null = silence)
   let active = null;         // Player currently playing `wanted`
   let players = [];          // all players (incl. fading ones)
@@ -1279,7 +1293,6 @@
     if (!G) return;
     try {
       if (G.ac.state !== 'running' && G.ac.state !== 'closed' && !isHidden()) {
-        resumeAskedAt = nowMs();
         const p = G.ac.resume();
         if (p && p.then) p.then(() => { if (G && G.ac.state === 'running') detachGestures(); tick(); }, noop);
       }
@@ -1295,6 +1308,7 @@
     try {
       if (!activated() && !G) return false;
       if (!ensure(true)) return false;
+      gestureAt = nowMs();
       resume();
       try {   // iOS: a silent buffer started inside the gesture fully unlocks output
         const b = G.ac.createBuffer(1, 1, 22050), s = G.ac.createBufferSource();
@@ -1305,14 +1319,15 @@
       return true;
     } catch (e) { return false; }
   }
-  // Can we schedule sound right now? (running, or a resume was just requested inside a gesture)
+  // Can we schedule sound right now? Running, or a gesture just asked to resume (the sound then starts
+  // a few ms late). Otherwise drop it, so stale effects never pile up in a suspended context.
   function canSound() {
     if (!G || isHidden()) return false;
     const st = G.ac.state;
     if (st === 'running') return true;
     if (st === 'closed') return false;
     resume();
-    return nowMs() - resumeAskedAt < 1500;
+    return nowMs() - gestureAt < 1000;
   }
 
   // One-time gesture listeners (capture phase, so they run before game handlers).
@@ -1349,7 +1364,8 @@
   function reconcile() {
     if (!G) return;
     const want = wanted && musicAllowed() && G.ac.state !== 'closed' ? wanted : null;
-    if (active && active.name === want && !active.ended) return;
+    // Same track already playing (a finished one-shot rings out its tail; never auto-restart it).
+    if (active && active.name === want) return;
     const oneShot = want && TRACKS[want].loop === false;
     const had = !!active;
     if (active) {
@@ -1437,7 +1453,12 @@
       try {
         const name = TRACKS[track] ? track : TRACK_ALIAS[track];
         if (!name) return false;
-        if (wanted === name && active && active.name === name && !active.fading) return true;
+        if (active && active.name === name) {
+          // Looping track already on: nothing to do. One-shot whose notes are over: play it again
+          // (the old instance keeps ringing out its tail and is disposed by tick()).
+          if (TRACKS[name].loop !== false || !active.ended) { wanted = name; return true; }
+          active = null;
+        }
         wanted = name;
         if (!G && activated()) ensure(true);
         reconcile(); ensureTimer();
@@ -1456,6 +1477,9 @@
       try { if (musicOn) unlock(); reconcile(); ensureTimer(); } catch (e) { /* ignore */ }
     },
     get enabled() { return musicAllowed(); },
+    /** Lite mode (auto on phones / ≤ 4 cores): fewer oscillators per note. Settable. */
+    get lite() { return LITE; },
+    set lite(b) { LITE = !!b; },
     /** Lower the music for `seconds` (used automatically during roars). */
     duck(seconds) {
       if (!G) return;
@@ -1482,6 +1506,9 @@
       });
     },
     _tracks: TRACKS,
+    // Test hooks: build the master graph / a track player on any (Offline)AudioContext.
+    _graph: (ac, gopts) => buildGraph(ac, gopts),
+    _player: (g, name, t0, fadeIn) => new Player(g, name, t0, fadeIn || 0.02),
   };
 
   function renderOffline(seconds, gopts, fill) {
