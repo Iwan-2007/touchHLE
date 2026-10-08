@@ -189,7 +189,7 @@ API (every mutation emits `'change'`):
   `'battle' {park, stage, won, reward}`; `'build' {park, obj}`.
 - Resources: `res(name)`, `canAfford(cost)`, `pay(cost)` → bool, `give(reward)` (xp via `addXP`), `addXP(n)` (multi level-up, `DATA.levelReward`, emits levelup with list of newly unlocked species/buildings/parks).
 - Species: `speciesStatus(id)` → `{state: 'level'|'research'|'researching'|'available', needLevel}`.
-- Research: `startResearch(id, boost)` → `{ok, reason}`; resolved in `tick()` when `endsAt` passes (chance roll, +boostChance if boosted, capped), emits `'research'`; result stays in `state.research` until `ackResearch()`. `speedUpResearch()`.
+- Research (multi-step model of §11 item 8 overrides this line): `startResearch(id, boost)` → `{ok, reason}`; resolved in `tick()` when `endsAt` passes (chance roll, +boostChance if boosted, capped), emits `'research'`; result stays in `state.research` until `ackResearch()`. `speedUpResearch()`.
 - Placement: `canPlace(park, gx, gy, w, h, ignoreId)` (inside map, terrain tile code 1, no overlap), `findFreeSpot(park, w, h)` (closest to park centre).
 - Creatures: `buyCreature(speciesId, gx, gy)` → `{ok, obj, reason}` (pays, enclosure with egg, `hatchAt = now + hatchSec*1000`, random name), `hatch(objId)`, `pendingCoins(obj)`, `collect(objId)` (creature coins or building production) → amount, `feed(objId)` → `{ok, levelUp, stageUp, reason}` (cost = statsAt(level).feedCost of the park's food; `feedsToLevel` feeds per level; max level 40), `creatureStats(obj)`, `creaturesOf(park, hatchedOnly)`.
 - Buildings: `buyBuilding(buildingId, gx, gy)` → `{ok, obj, reason}`, `move(objId, gx, gy)`, `sell(objId)` (refund SELL_RATIO, never fixed), `speedUpCost(obj)`, `speedUp(objId)` (eggs and productions).
@@ -286,7 +286,12 @@ French everywhere with correct accents, friendly tone. Zero console errors. Each
 with `require('playwright')`, chromium is preinstalled — never run `playwright install`). LOOK at your
 screenshots with the Read tool and iterate until the result is genuinely good.
 
-## 11. Phase 2 additions (requested by the player after the first build)
+## 11. Additional requirements from the player — PART OF THE BUILD, they override earlier sections
+
+Owners: intro + missions panel + music + research/expedition screens → ui agent (music in a new file
+`js/music.js`, loaded right after `js/ui.js`); battle moves, camera, story map, medals → battle agent;
+side missions, medals, research steps, expeditions → engine agent; aquatic look → iso + buildings agents.
+If your module was already finished before this section existed, the integration step will handle it.
 
 1. **Launch animation**: after the title screen's JOUER (or right at boot before it), a short intro
    (~4 s, skippable by tap): jungle silhouette background, a big T-Rex (PC.ART.drawCreature 'tyrannosaurus',
@@ -353,3 +358,58 @@ screenshots with the Read tool and iterate until the result is genuinely good.
   backend: claude.ai capabilities (`db`/`room`/`user`). The player plans to host the game publicly later
   (e.g. GitHub Pages for the static files + Firebase/Supabase or a small Node WebSocket server), so no
   game code may call `claude.use` directly — only the claude.ai backend of `PC.NET` does.
+8. **DNA research in several steps + expeditions (reference screenshots)** — overrides §5/§9 research:
+   - A species with `sp.research` needs several successful attempts: `steps` = commun 2, rare 3, super 4,
+     legendaire 5 (`PC.DATA.RESEARCH.steps[rarity]`, engine falls back to these numbers). Each attempt costs
+     `ceil(sp.research.cost / steps)` coins, plays a short sequencing (`DATA.RESEARCH.durationSec`), and
+     succeeds with `sp.research.chance` % (+20 with a 5-dollar boost, capped 95). Success fills one step;
+     failure offers **Réessayer** for 1 dollar (re-runs the same attempt without paying coins again).
+     `state.researchProgress[speciesId]` = steps done; when complete, `researched[id] = true` and the
+     `'research'` event carries `{speciesId, success, step, steps, complete}`.
+     Engine API: `startResearch(id, boost)`, `retryResearch()`, `researchSteps(id)` → `{done, steps}`.
+   - UI (like the reference "Research Center"): a long DNA-helix progress bar across the top (filled per
+     step), a row of glass tubes with spinning yellow/green DNA helices that light up as steps succeed, a
+     big yellow **Tenter la recherche (coût)** button, a small **Réessayer 1 $** button after a failure, and
+     a right panel of assistant slots (Élise + empty silhouettes labelled « Bientôt : aide des amis »).
+     On completion: modal **RECHERCHE TERMINÉE !** with an egg in its nest, text « Tu as terminé la
+     recherche du <espèce> ! », buttons **Plus tard** / **Aller au marché**.
+   - **Expéditions ADN**: one at a time. `startExpedition(park, speciesId)` sends a vehicle (land: jeep,
+     sea: submarine, ice: snow tracker) for `DATA.EXPEDITION.durationSec[rarity]` (60–600 s) costing
+     coins; on return (tick) a roll with `DATA.EXPEDITION.chance[rarity]` (35–60 %): success = amber DNA
+     found → research of that species completed instantly; failure = **Dernière chance** offer to buy the
+     amber for `DATA.EXPEDITION.buyDollars[rarity]` dollars (`buyExpeditionDNA()` / `declineExpedition()`),
+     shown on a misty background with a glowing amber crystal and buttons **Non** / **L'acheter pour X $**.
+     `state.expedition = null | {park, speciesId, startedAt, endsAt, cost, chance, result}`.
+     Occasional **EXPÉDITION FLASH !** promo (at most once per 30 min, lasts 5 min): −30 % on expeditions
+     (`state.promo = {kind: 'expedition', until, discount: 0.3}`), announced by a popup.
+     Engine falls back to sensible numbers when `PC.DATA.EXPEDITION` is missing.
+   - Labo ADN panel has two tabs: **Recherche** and **Expéditions**. New icon `amber` (blue-violet crystal
+     with a DNA strand inside) drawn by the ui agent.
+9. **Engine support for the items above**: side missions (`state.sideMissions` — 3 generated from templates
+   scaled to the player level; `sideMissions()` → `[{def, progress, target, done}]`, `claimSide(i)` gives
+   the reward and generates a replacement), medals (`state.medals[park][stage] = 0..3`,
+   `recordBattle(park, stage, won, tier)` with tier 1 Bronze / 2 Argent / 3 Or, `battleEnemies(park, stage,
+   tier)` returns the scaled enemy list), research steps and expeditions (item 8).
+10. **Rarity tiers and the market (reference screenshots)**: five tiers from weakest to strongest —
+    **Ordinaire** (key `commun`), **Rare** (`rare`), **Épique** (key `super`), **Légendaire** (`legendaire`),
+    **Mythique** (`mythique`, new) — see `PC.RARITY_ORDER`; rarity colour frames on every card. Mythic
+    species (Titanosaure, Rex Volcanique, Mosasaure des Abysses, Mammouth des Glaces Éternelles) get an
+    automatic pulsing aura and glowing particles from art_core. **Each species can be created only once
+    per player** (market card shows « Déjà créé »; selling it makes it available again). **Offres limitées**:
+    `state.offer = {speciesId, until}` rotates every 24 h among épique+ species and the `offerOnly`
+    species (e.g. Tapejara, price in dollars `sp.price.dollars`), shown first in the market with a yellow
+    « N j restants » / « N h restantes » tag and a red "!" ; `buyCreature` accepts dollar prices.
+    Market layout: vertical category tabs with icons on the left (Créatures, Bâtiments, Nourriture,
+    Décorations, Routes), a title plate, horizontally scrolling cards (name, picture, price button).
+11. **Buildings with levels, Activer, contextual action bar (reference "Crops Harbor")**: every
+    non-special building has a level 1–5 (`obj.level`); **Améliorer** costs coins (`cost × 1.5^level`) and
+    multiplies production by 1.5 per level. Food buildings must be **Activés**: choose a delivery among 3
+    options (e.g. 5 min → small, 30 min → medium, 2 h → large; `DATA.BUILDINGS[id].orders`, engine fallback
+    derived from `produce`), then **Collecter** when done; coin buildings produce automatically. Tapping a
+    building shows a bottom action bar like the reference (name + level + production/timer plate, round
+    metal buttons ACTIVER / COLLECTER / AMÉLIORER / DÉPLACER / VENDRE, "i" opens the full panel).
+    New buildings: `crops_harbor` (land food port with cargo ship, cranes, containers; 3x3) and in the
+    glacier park a fixed arrival **harbor** start zone (`harbor_ice` special 4x3: dock, red and green
+    hangars, containers, a tunnel entrance in the cliff, hovercrafts) plus decos `helipad` [2,2],
+    `hovercraft` [1,1], `snow_tracker` [1,1] and a round domed visitor centre `visitor_center_ice` [3,3].
+    Engine API: `upgrade(objId)`, `upgradeCost(obj)`, `activate(objId, orderIndex)`.

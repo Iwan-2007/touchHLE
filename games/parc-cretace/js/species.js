@@ -6,11 +6,14 @@
   PC.MAX_LEVEL = 40;
 
   PC.RARITY = {
-    commun:     { name: 'Commun',     color: '#9aa3a8', frame: '#6f777c', hp: 320,  atkMin: 30,  atkMax: 75,  cpm: 30,  feedBase: 25,  xpHatch: 40 },
+    commun:     { name: 'Ordinaire',  color: '#9aa3a8', frame: '#6f777c', hp: 320,  atkMin: 30,  atkMax: 75,  cpm: 30,  feedBase: 25,  xpHatch: 40 },
     rare:       { name: 'Rare',       color: '#4f9fe0', frame: '#2c6aa3', hp: 520,  atkMin: 50,  atkMax: 120, cpm: 70,  feedBase: 50,  xpHatch: 120 },
-    super:      { name: 'Super rare', color: '#b06ae0', frame: '#7a3fa8', hp: 820,  atkMin: 80,  atkMax: 190, cpm: 160, feedBase: 100, xpHatch: 350 },
+    super:      { name: 'Épique',     color: '#b06ae0', frame: '#7a3fa8', hp: 820,  atkMin: 80,  atkMax: 190, cpm: 160, feedBase: 100, xpHatch: 350 },
     legendaire: { name: 'Légendaire', color: '#f0b030', frame: '#b07a12', hp: 1250, atkMin: 130, atkMax: 300, cpm: 400, feedBase: 200, xpHatch: 1000 },
+    mythique:   { name: 'Mythique',   color: '#ff3b6b', frame: '#a3122d', hp: 1900, atkMin: 200, atkMax: 460, cpm: 900, feedBase: 400, xpHatch: 2500 },
   };
+  /** Rarity keys from weakest to strongest (key 'super' is displayed as « Épique »). */
+  PC.RARITY_ORDER = ['commun', 'rare', 'super', 'legendaire', 'mythique'];
 
   // Rock-paper-scissors: each class deals +25 % to the class it beats and −20 % to the class that beats it.
   PC.CLASSES = {
@@ -24,7 +27,7 @@
 
   let seed = 1;
   // S(id, name, park, art, features, rarity, cls, level, research, coins, hatchSec, [body, belly, accent], pattern, size, desc)
-  function S(id, name, park, art, features, rarity, cls, level, research, coins, hatchSec, col, pattern, size, desc) {
+  function S(id, name, park, art, features, rarity, cls, level, research, coins, hatchSec, col, pattern, size, desc, extra) {
     PC.SPECIES[id] = {
       id, name, park, art, features, rarity, cls, level,
       research: research ? { cost: research[0], chance: research[1] } : null,
@@ -33,6 +36,7 @@
       pattern, size, desc, seed: seed++,
       mod: 0.9 + level * 0.015,
     };
+    if (extra) Object.assign(PC.SPECIES[id], extra);
     PC.SPECIES_ORDER[park].push(id);
   }
 
@@ -69,8 +73,16 @@
     ['#8c6b4b', '#dcc4a0', '#a84433'], 'stripes', 1.2, 'Le grand prédateur du Jurassique, reconnaissable à ses petites cornes.');
   S('tyrannosaurus', 'Tyrannosaure', 'land', 'theropod', ['big_head'], 'legendaire', 'chasseur', 14, [40000, 35], 60000, 300,
     ['#6b5a48', '#b9a184', '#3a2c22'], 'stripes', 1.5, 'Le roi des dinosaures. Sa morsure est la plus puissante de tous les animaux terrestres.');
+  S('tapejara', 'Tapejara', 'land', 'pterosaur', ['head_crest', 'sail_crest'], 'super', 'chasseur', 9, null, 0, 150,
+    ['#5b6f8a', '#e8e0d0', '#e0452f'], 'none', 0.85, 'Un ptérosaure à l’immense crête colorée. Disponible seulement en offre limitée !',
+    { offerOnly: true, price: { dollars: 120 } });
   S('giganotosaurus', 'Giganotosaure', 'land', 'theropod', ['big_head', 'brow_ridge'], 'legendaire', 'chasseur', 18, [60000, 30], 90000, 420,
     ['#7a7066', '#c4b7a5', '#8a3a2a'], 'spots', 1.6, 'Encore plus long que le Tyrannosaure. Le géant d’Amérique du Sud.');
+
+  S('titanosaurus', 'Titanosaure', 'land', 'sauropod', ['long_low_neck', 'giant'], 'mythique', 'colosse', 20, [120000, 25], 200000, 900,
+    ['#6f6a5c', '#d8cfb6', '#3fb0a0'], 'spots', 1.9, 'Le plus grand animal ayant jamais marché sur Terre : 37 mètres et 70 tonnes.');
+  S('volcanorex', 'Rex Volcanique', 'land', 'theropod', ['big_head', 'brow_ridge', 'lava'], 'mythique', 'chasseur', 24, [150000, 20], 260000, 1200,
+    ['#2e2724', '#4a3b32', '#ff6a1a'], 'stripes', 1.6, 'Une légende du parc : sa peau sombre est parcourue de fissures de lave incandescente.');
 
   // ---------- Parc Aquatique ----------
   S('archelon', 'Archélon', 'sea', 'turtle', [], 'commun', 'blinde', 5, null, 3000, 30,
@@ -94,6 +106,9 @@
   S('mosasaurus', 'Mosasaure', 'sea', 'mosasaur', ['big', 'frill_back'], 'legendaire', 'chasseur', 15, [70000, 30], 100000, 480,
     ['#3d5a5f', '#e3e0c8', '#1e2f33'], 'stripes', 1.8, 'Le monstre des océans du Crétacé. Il avale tout ce qui passe.');
 
+  S('abyssosaurus', 'Mosasaure des Abysses', 'sea', 'mosasaur', ['big', 'frill_back', 'glow'], 'mythique', 'chasseur', 22, [160000, 20], 280000, 1200,
+    ['#1d2a44', '#5f7aa0', '#36e0ff'], 'spots', 2.0, 'Venu des grands fonds, ses taches lumineuses éclairent l’océan noir.');
+
   // ---------- Parc Glaciaire ----------
   S('dodo', 'Dodo', 'ice', 'bird', [], 'commun', 'blinde', 10, null, 4000, 30,
     ['#8a8f96', '#d8d2c4', '#d9b13a'], 'none', 0.6, 'Un gros oiseau qui ne vole pas, curieux et pas du tout farouche.');
@@ -113,6 +128,9 @@
     ['#6b4e36', '#a8896a', '#3a2a1e'], 'none', 1.3, 'L’ours à face courte, debout il dépasse 3 mètres.');
   S('mammoth', 'Mammouth laineux', 'ice', 'elephant', ['tusks', 'wool'], 'legendaire', 'colosse', 16, [70000, 30], 110000, 480,
     ['#6b4a32', '#a17f60', '#efe6d2'], 'none', 1.8, 'Le géant de l’ère glaciaire, avec ses défenses recourbées de 4 mètres.');
+
+  S('glacimammoth', 'Mammouth des Glaces Éternelles', 'ice', 'elephant', ['tusks', 'wool', 'frost'], 'mythique', 'colosse', 24, [170000, 20], 300000, 1200,
+    ['#dfe8ee', '#a9c2d4', '#5fd8ff'], 'none', 2.0, 'Un mammouth géant couvert de givre, dont les défenses brillent comme de la glace.');
 
   /** Stats of a creature of species `id` at `level` (1..40). */
   PC.statsAt = function (id, level) {

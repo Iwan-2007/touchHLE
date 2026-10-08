@@ -356,13 +356,53 @@
       ctx.restore();
       return;
     }
+    const mythic = sp.rarity === 'mythique';
+    if (mythic) drawAura(ctx, sp, o, meta, s, false);
     ctx.save();
     ctx.globalAlpha *= o.alpha;
     ctx.translate(o.x, o.y);
     ctx.scale(o.facing * s, s);
     drawIt(ctx);
     ctx.restore();
+    if (mythic) drawAura(ctx, sp, o, meta, s, true);
   };
+
+  /** Mythic creatures: pulsing aura behind (front=false) and rising glowing particles in front (front=true). */
+  function drawAura(ctx, sp, o, meta, s, front) {
+    const b = meta.bounds, f = o.facing || 1;
+    const cx = o.x + (b[0] + b[2]) / 2 * s * f, cy = o.y + (b[1] + b[3]) / 2 * s;
+    const r = Math.max(b[2] - b[0], b[3] - b[1]) * 0.62 * s;
+    const col = sp.colors.accent;
+    ctx.save();
+    ctx.globalAlpha *= o.alpha;
+    if (!front) {
+      const pulse = 0.28 + 0.1 * Math.sin(o.t * 3);
+      ctx.globalCompositeOperation = 'lighter';
+      ctx.fillStyle = H.radial(ctx, cx, cy, r * 0.1, r, [[0, H.rgba(col, pulse)], [0.6, H.rgba(col, pulse * 0.35)], [1, H.rgba(col, 0)]]);
+      ctx.fillRect(cx - r, cy - r, r * 2, r * 2);
+    } else {
+      ctx.globalCompositeOperation = 'lighter';
+      const feats = sp.features || [];
+      const kind = feats.includes('lava') ? 'ember' : feats.includes('frost') ? 'frost' : 'glow';
+      for (let i = 0; i < 9; i++) {
+        const ph = (o.t * 0.35 + i / 9) % 1;
+        const px = cx + Math.sin(i * 2.4 + o.t * 0.8) * r * 0.75;
+        const py = cy + r * 0.5 - ph * r * 1.3;
+        const a = Math.sin(ph * Math.PI) * 0.9;
+        const pr = Math.max(1.2, r * (kind === 'frost' ? 0.035 : 0.028));
+        ctx.fillStyle = kind === 'ember' ? `rgba(255,${120 + i * 12},40,${a})` : kind === 'frost' ? `rgba(220,245,255,${a})` : H.rgba(col, a);
+        if (kind === 'frost') {
+          ctx.save(); ctx.translate(px, py); ctx.rotate(o.t + i);
+          ctx.fillRect(-pr, -pr * 0.25, pr * 2, pr * 0.5); ctx.fillRect(-pr * 0.25, -pr, pr * 0.5, pr * 2);
+          ctx.restore();
+        } else {
+          H.ellipse(ctx, px, py, pr, pr);
+          ctx.fill();
+        }
+      }
+    }
+    ctx.restore();
+  }
 
   /** Screen-space bounding box of a creature drawn with the same o (for hit tests). */
   ART.creatureBox = function (speciesId, o) {
