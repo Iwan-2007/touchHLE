@@ -223,7 +223,7 @@
     amara: { name: 'Amara Diallo', role: 'Capitaine de la Brigade des Volcans',
       look: { skin: '#6a3f26', hair: '#140c08', hairStyle: 'bun', shirt: '#7a3a8a', accent: '#f0c040' } },
     nina: { name: 'Nina Ruiz', role: 'Plongeuse championne du Récif',
-      look: { skin: '#d6a07a', hair: '#5a2a1a', hairStyle: 'long', shirt: '#1f9a8a', accent: '#ff8a5a', glasses: true } },
+      look: { skin: '#d6a07a', hair: '#5a2a1a', hairStyle: 'long', shirt: '#1f9a8a', accent: '#ff8a5a' } },
     bjorn: { name: 'Björn Halvorsen', role: 'Musher du Grand Nord',
       look: { skin: '#f4dccb', hair: '#d4862e', hairStyle: 'long', shirt: '#3a6a7a', accent: '#f2f2f2', beard: true } },
   };
@@ -241,7 +241,7 @@
       'Avant d’accueillir nos premiers dinosaures, il leur faut de quoi manger.',
       'Ouvre le MARCHÉ et construis une Ferme de fougères.',
     ], { type: 'build', building: 'fern_farm', count: 1 }, { coins: 300, xp: 15 },
-    'Parfait ! Les fougères poussent déjà, nos herbivores vont se régaler.'),
+    'Parfait ! Touche la ferme et choisis une livraison : les fougères vont pousser.'),
 
     M('m02', 'land', 'elise', 'Un œuf tout chaud', [
       'Le grand moment est arrivé : notre tout premier œuf !',
@@ -490,8 +490,8 @@
       T(4, 'Les requins de Krane', 'krane', 7, [['dunkleosteus', 4], ['plesiosaurus', 3], ['ichthyosaurus', 7]], { coins: 4150, xp: 140, dollars: 5 }),
       T(5, 'Courants profonds', 'nina', 8, [['tylosaurus', 5], ['plesiosaurus', 5], ['archelon', 8]], { coins: 3400, xp: 115 }),
       T(6, 'La fosse obscure', 'ines', 9, [['tylosaurus', 7], ['dunkleosteus', 7], ['plesiosaurus', 7]], { coins: 4050, xp: 135, dollars: 3 }),
-      T(7, 'Le cou le plus long', 'nina', 10, [['megalodon', 2], ['plesiosaurus', 6], ['dunkleosteus', 6]], { coins: 4750, xp: 160 }),
-      T(8, 'Marée noire de Krane', 'krane', 11, [['elasmosaurus', 4], ['megalodon', 4], ['tylosaurus', 8]], { coins: 8200, xp: 275, dollars: 8 }),
+      T(7, 'Le grand requin', 'nina', 10, [['megalodon', 2], ['plesiosaurus', 6], ['dunkleosteus', 6]], { coins: 4750, xp: 160 }),
+      T(8, 'Les monstres de Krane', 'krane', 11, [['elasmosaurus', 4], ['megalodon', 4], ['tylosaurus', 8]], { coins: 8200, xp: 275, dollars: 8 }),
       T(9, 'Les géants des abysses', 'nina', 12, [['liopleurodon', 6], ['elasmosaurus', 6], ['dunkleosteus', 10]], { coins: 6250, xp: 210, dollars: 4 }),
       T(10, 'Tempête en haute mer', 'ines', 14, [['shonisaurus', 8], ['liopleurodon', 8], ['megalodon', 8]], { coins: 7850, xp: 260 }),
       T(11, 'Le roi des mers', 'nina', 16, [['mosasaurus', 7], ['elasmosaurus', 10], ['liopleurodon', 10]], { coins: 9600, xp: 320 }),

@@ -115,6 +115,18 @@
     return [ax + ux * a + uy * h * dir, ay + uy * a - ux * h * dir, ax + dx, ay + dy];
   }
 
+  /** Rotate a head upwards until its lowest sample point (head-local pts × scale s) stays above the ground. */
+  function clampHead(ne, hA, pts, s) {
+    for (let it = 0; it < 30; it++) {
+      const c = Math.cos(hA), si = Math.sin(hA);
+      let maxY = -1e9;
+      for (const p of pts) { const y = ne[1] + (p[0] * si + p[1] * c) * s; if (y > maxY) maxY = y; }
+      if (maxY <= 0) break;
+      hA -= 0.05;
+    }
+    return hA;
+  }
+
   /** Tail chain from base going backwards. ang ≈ PI points straight back (PI + x tilts up). Returns joints tip-first. */
   function tailJoints(X, base, ang, len, n, curl, amp, speed) {
     const out = new Array(n);
@@ -225,6 +237,7 @@
       const i0 = opt.belly ? opt.belly[0] : 1, i1 = opt.belly ? opt.belly[1] : T.n - 1;
       band(ctx, T, i0, i1, 0.1, P.bellyA);
       band(ctx, T, i0, i1, 0.48, P.bellyB);
+      band(ctx, T, i0, i1, 0.8, 'rgba(25,12,4,.14)');
     }
     if (opt.pat) pattern(ctx, sp, X, opt.pat[0], opt.pat[1], opt.pat[2], opt.pat[3], opt.patK);
     texture(ctx, P, sp.seed, b[0], b[1], b[2], b[3], opt.tex || 70, 0.8, 2.1);
@@ -361,49 +374,55 @@
       ctx.beginPath(); ctx.moveTo(hp[0] + w * 0.25, hp[1] - w * 0.1); ctx.quadraticCurveTo(m[0] + w * 0.35, m[1], k[0] + w * 0.05, k[1] - w * 0.2); ctx.stroke();
       ctx.restore();
     }
-    toes(ctx, X, F[0], F[1], w, lift > 0.5 ? Math.min(0.75, lift * 0.1) : 0, fill, sickle);
+    const tl = 3 + w * 0.85 + 3, up = -F[1];
+    toes(ctx, X, F[0], F[1], w, up > 0.5 ? Math.min(0.75, up * 0.1, Math.asin(clamp(up / tl, 0, 1))) : 0, fill, sickle);
     return F;
   }
   function toes(ctx, X, x, y, w, droop, fill, sickle) {
-    const P = X.P, tl = 3 + w * 0.8, h = Math.max(2.4, w * 0.3);
+    const P = X.P, tl = 3 + w * 0.85, h = Math.max(2.2, w * 0.24);
     ctx.save();
     ctx.translate(x, y);
     ctx.rotate(droop);
-    // back toe
-    H.smooth(ctx, [[-1, -h * 0.9], [-tl * 0.45, -h * 0.4], [-tl * 0.5, 0], [-1, 0]], true, 0.4);
-    H.fillStroke(ctx, P.far, P.ink, LW * 0.7);
-    H.smooth(ctx, [[-w * 0.3, -h * 1.1], [tl * 0.5, -h], [tl, -h * 0.35], [tl + 1, 0], [tl * 0.4, 0.2], [-w * 0.35, 0.2]], true, 0.4);
-    H.fillStroke(ctx, fill, P.ink, LW * 0.85);
-    ctx.strokeStyle = H.rgba(P.ink, 0.6); ctx.lineWidth = 0.9;
-    ctx.beginPath(); ctx.moveTo(tl * 0.15, -h * 0.75); ctx.lineTo(tl * 0.75, -h * 0.4); ctx.stroke();
-    // claws
-    ctx.fillStyle = P.claw;
-    ctx.beginPath(); ctx.moveTo(tl - 1, -h * 0.5); ctx.quadraticCurveTo(tl + 3.2, -h * 0.4, tl + 3.4, 0.4); ctx.lineTo(tl - 0.4, 0.2); ctx.closePath(); ctx.fill();
+    const toe = (x0, len, col, s) => {
+      H.limb(ctx, [[x0, -h * 0.9], [x0 + len * 0.45, -h * 0.75], [x0 + len, -h * 0.35]], [h * 1.9 * s, h * 1.35 * s, h * 0.9 * s]);
+      H.fillStroke(ctx, col, P.ink, LW * 0.75);
+      // claw
+      const cx = x0 + len + h * 0.2;
+      ctx.beginPath(); ctx.moveTo(cx - h * 0.5, -h * 0.85); ctx.quadraticCurveTo(cx + h * 0.9, -h * 0.7, cx + h * 0.8, 0.6); ctx.lineTo(cx - h * 0.4, -h * 0.05); ctx.closePath();
+      ctx.fillStyle = P.claw; ctx.fill();
+    };
+    toe(-w * 0.15, -tl * 0.32, P.far, 0.8);       // dewclaw (back)
+    toe(-w * 0.1, tl * 0.85, H.shade(fill === P.far ? P.far : P.body, -0.22), 0.95); // far toe
+    toe(-w * 0.2, tl, fill, 1);                    // near toe
+    ctx.strokeStyle = H.rgba(P.ink, 0.45); ctx.lineWidth = 0.8;
+    ctx.beginPath(); ctx.moveTo(tl * 0.3, -h * 1.3); ctx.lineTo(tl * 0.32, -h * 0.4); ctx.moveTo(tl * 0.62, -h * 1.1); ctx.lineTo(tl * 0.64, -h * 0.35); ctx.stroke();
     if (sickle) {
       const s = sickle;
-      ctx.strokeStyle = P.claw; ctx.lineWidth = 2.1 * s; ctx.lineCap = 'round';
-      ctx.beginPath(); ctx.moveTo(tl * 0.2, -h * 0.9); ctx.quadraticCurveTo(tl * 0.35, -h * 2.6 * s, tl * 0.75, -h * 2.1 * s); ctx.stroke();
+      ctx.strokeStyle = P.ink; ctx.lineWidth = 3.4 * Math.sqrt(s) + 0.6; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(tl * 0.12, -h * 1.2); ctx.quadraticCurveTo(tl * 0.2, -h * 3.4 * s, tl * 0.72, -h * 2.9 * s); ctx.stroke();
+      ctx.strokeStyle = '#3a2c20'; ctx.lineWidth = 2.2 * Math.sqrt(s);
+      ctx.stroke();
     }
     ctx.restore();
   }
   /** Biped arm: shoulder → elbow → hand with claws. Optional feather fan (raptors). */
   function arm(ctx, X, sh, a1, len, w, fingers, clawL, fill, feather) {
-    const P = X.P, a2 = a1 - 1.15;
-    const el = [sh[0] + Math.cos(a1) * len * 0.5, sh[1] + Math.sin(a1) * len * 0.5];
+    const P = X.P, a2 = a1 - 0.8;
+    const el = [sh[0] + Math.cos(a1) * len * 0.48, sh[1] + Math.sin(a1) * len * 0.48];
     const hd = [el[0] + Math.cos(a2) * len * 0.5, el[1] + Math.sin(a2) * len * 0.5];
     if (feather) {
       const fl = feather.len, n = 6;
       ctx.save();
       for (let i = 0; i < n; i++) {
-        const u = i / (n - 1), p = lerpPt(el, hd, 0.15 + u * 0.85), a = a2 + 1.9 - u * 0.5, l = fl * (0.65 + u * 0.4);
+        const u = i / (n - 1), p = lerpPt(el, hd, u * 0.95), a = a2 + 2.75 - u * 0.55, l = fl * (0.55 + u * 0.55);
         H.ellipse(ctx, p[0] + Math.cos(a) * l * 0.5, p[1] + Math.sin(a) * l * 0.5, l * 0.5, l * 0.13 + 1, a);
         H.fillStroke(ctx, i % 2 ? feather.c1 : feather.c2, P.ink, 1);
       }
       ctx.restore();
     }
-    H.limb(ctx, [sh, el, hd], [w * 1.5, w, w * 0.75]);
-    H.fillStroke(ctx, fill, P.ink, LW * 0.85);
-    H.claws(ctx, hd[0], hd[1], fingers, clawL, a2 + 0.45, P.claw);
+    H.limb(ctx, [sh, el, hd], [w * 1.45, w * 1.05, w * 0.8]);
+    H.fillStroke(ctx, fill, P.ink, LW * 0.8);
+    H.claws(ctx, hd[0], hd[1], fingers, clawL, a2 + 0.1, P.claw);
   }
   /** Pillar leg for quadrupeds (top → knee/elbow → foot) with a padded foot and nails. bend +1 knee forward. */
   function quadLeg(ctx, X, top, foot, l1, l2, w, bend, fill, near) {
@@ -494,42 +513,50 @@
     const sh = B(bl - 5, V.dn * 0.45);
     const sickle = hooks.sickle ? S.feat : 0;
     digiLeg(ctx, X, hipF, fF, lF, thigh, shin, meta, V.legW, P.far, false, sickle);
-    const armLen = V.armLen * (st === 0 ? 0.85 : 1), feather = hooks.armFeather ? { len: 13 * (st === 0 ? 0.6 : 1), c1: P.dark, c2: H.shade(P.acc, -0.2) } : null;
+    const armLen = V.armLen * (st === 0 ? 0.85 : 1), feather = hooks.armFeather ? { len: 17 * (st === 0 ? 0.6 : st === 3 ? 1.15 : 1), c1: P.dark, c2: H.mix(P.acc, P.body, 0.3) } : null;
     arm(ctx, X, [sh[0] + 3, sh[1] - 2], a1 + 0.15, armLen, V.armW, V.fingers, V.clawL, P.far, feather && { len: feather.len, c1: H.shade(feather.c1, -0.2), c2: H.shade(feather.c2, -0.25) });
     if (hooks.behind) hooks.behind(R);
     paintTrunk(ctx, X, sp, T, G, {
       pat: [T.joints[2][0], T.box[1], T.joints[6][0] + 4, T.joints[5][1] + V.dn * 0.25],
-      rim: [1, 8], hl: [B(bl * 0.4, 0)[0], B(0, -V.up * 0.6)[1], bl * 0.75], tex: 80,
+      rim: [1, 8], hl: [B(bl * 0.4, 0)[0], B(0, -V.up * 0.6)[1], bl * 0.75], tex: 64,
     });
+    ctx.strokeStyle = H.rgba(P.ink, 0.22); ctx.lineWidth = 1.6; ctx.lineCap = 'round';
+    const c0 = B(bl - 1, -V.up * 0.55), c1 = B(bl - 9, V.dn * 0.1), c2 = B(bl - 5, V.dn * 0.7);
+    ctx.beginPath(); ctx.moveTo(c0[0], c0[1]); ctx.quadraticCurveTo(c1[0], c1[1], c2[0], c2[1]); ctx.stroke();
     if (hooks.flank) hooks.flank(R);
     if (st === 3) {
       // Alpha: glowing war-paint chevrons on the flank, claw scars on the hip
-      const segs = [];
-      for (let i = 0; i < 3; i++) {
-        const u = 0.42 + i * 0.17;
-        segs.push([B(bl * u - 3, -V.up * 0.55), B(bl * u + 3, -V.up * 0.05), B(bl * u - 2, V.dn * 0.35)]);
+      if (!hooks.noChevrons) {
+        const segs = [];
+        for (let i = 0; i < 3; i++) {
+          const u = 0.42 + i * 0.17;
+          segs.push([B(bl * u - 3, -V.up * 0.55), B(bl * u + 3, -V.up * 0.05), B(bl * u - 2, V.dn * 0.35)]);
+        }
+        glowLines(ctx, X, segs, 1.4);
       }
-      glowLines(ctx, X, segs, 1.4);
       const c = B(-bl * 0.05, -V.up * 0.35);
       clawScars(ctx, X, c[0], c[1], 1.0 + tilt, V.up * 0.9, 1.1);
     }
+    H.ellipse(ctx, hipS[0] + 2, hipS[1] + V.legW * 0.1, V.legW * 0.95, V.legW * 0.75);
+    ctx.fillStyle = 'rgba(25,12,4,.13)'; ctx.fill();
     digiLeg(ctx, X, hipS, fN, lN, thigh, shin, meta, V.legW, G, true, sickle);
     hooks.head(R);
-    arm(ctx, X, sh, a1, armLen, V.armW, V.fingers, V.clawL, G, feather);
+    arm(ctx, X, sh, a1, armLen, V.armW, V.fingers, V.clawL * (st === 0 ? 0.7 : 1), G, feather);
     return R;
   }
 
   // ===================================================================
   // THEROPODS — one template, seven distinct species driven by features
   const TH = {
-    allo:   { hipX: -6, hipH: 58, thigh: 28, shin: 26, meta: 14, legW: 19, bodyLen: 46, up: 16, dn: 19, neckLen: 24, neckW: 15, neckAng: -0.8, headAng: 0.12, headLen: 38, headH: 18, tailLen: 72, tailW: 15, tailAng: 0.06, armLen: 17, armW: 5, fingers: 3, clawL: 4, eyeR: 2.9, jawMax: 0.62, teeth: 8, toothL: 3.6, walk: 7, lunge: 14, stride: 13, iris: '#e3a62c', atkTilt: 0.12, atkNeck: 0.05, atkHead: 0.18, eatNeck: 1.0, eatHead: 0.95 },
-    rex:    { hipX: -6, hipH: 62, thigh: 31, shin: 28, meta: 15, legW: 25, bodyLen: 48, up: 22, dn: 26, neckLen: 18, neckW: 24, neckAng: -0.7, headAng: 0.1, headLen: 50, headH: 27, tailLen: 70, tailW: 21, tailAng: 0.04, armLen: 10, armW: 4.5, fingers: 2, clawL: 3, eyeR: 3.1, jawMax: 0.72, teeth: 8, toothL: 5.5, walk: 5.5, lunge: 12, stride: 12, iris: '#e8b13a', atkTilt: 0.1, atkNeck: 0.1, atkHead: 0.2, eatNeck: 1.05, eatHead: 0.9 },
-    giga:   { hipX: -6, hipH: 62, thigh: 31, shin: 28, meta: 15, legW: 23, bodyLen: 52, up: 20, dn: 24, neckLen: 20, neckW: 21, neckAng: -0.72, headAng: 0.12, headLen: 54, headH: 24, tailLen: 76, tailW: 20, tailAng: 0.04, armLen: 14, armW: 5, fingers: 3, clawL: 3.5, eyeR: 3, jawMax: 0.7, teeth: 9, toothL: 5, walk: 5.5, lunge: 12, stride: 12, iris: '#e0902a', atkTilt: 0.1, atkNeck: 0.1, atkHead: 0.2, eatNeck: 1.05, eatHead: 0.9 },
+    allo:   { hipX: -6, hipH: 58, thigh: 28, shin: 26, meta: 14, legW: 19, bodyLen: 46, up: 16, dn: 19, neckLen: 24, neckW: 15, neckAng: -0.8, headAng: 0.12, headLen: 41, headH: 18.5, tailLen: 72, tailW: 15, tailAng: 0.06, armLen: 17, armW: 5, fingers: 3, clawL: 4, eyeR: 2.9, jawMax: 0.62, teeth: 8, toothL: 3.6, walk: 7, lunge: 14, stride: 13, iris: '#e3a62c', atkTilt: 0.12, atkNeck: 0.05, atkHead: 0.18, eatNeck: 1.0, eatHead: 0.95 },
+    rex:    { hipX: -6, hipH: 62, thigh: 31, shin: 28, meta: 15, legW: 26, bodyLen: 48, up: 23, dn: 28, neckLen: 18, neckW: 29, neckAng: -0.7, headAng: 0.1, headLen: 52, headH: 30, tailLen: 70, tailW: 21, tailAng: 0.04, armLen: 12, armW: 5, fingers: 2, clawL: 4, eyeR: 3.1, jawMax: 0.72, teeth: 8, toothL: 5.5, walk: 5.5, lunge: 12, stride: 12, iris: '#e8b13a', atkTilt: 0.1, atkNeck: 0.1, atkHead: 0.2, eatNeck: 0.85, eatHead: 0.62 },
+    giga:   { hipX: -6, hipH: 62, thigh: 31, shin: 28, meta: 15, legW: 23, bodyLen: 56, up: 20, dn: 24, neckLen: 22, neckW: 22, neckAng: -0.72, headAng: 0.12, headLen: 58, headH: 24, tailLen: 80, tailW: 20, tailAng: 0.04, armLen: 14, armW: 5, fingers: 3, clawL: 3.5, eyeR: 3, jawMax: 0.7, teeth: 9, toothL: 5, walk: 5.5, lunge: 12, stride: 12, iris: '#e0902a', atkTilt: 0.1, atkNeck: 0.1, atkHead: 0.2, eatNeck: 0.9, eatHead: 0.66 },
     carno:  { hipX: -6, hipH: 62, thigh: 29, shin: 30, meta: 15, legW: 18, bodyLen: 44, up: 15, dn: 17, neckLen: 24, neckW: 14, neckAng: -0.85, headAng: 0.12, headLen: 30, headH: 20, tailLen: 70, tailW: 14, tailAng: 0.06, armLen: 6, armW: 4, fingers: 4, clawL: 2, eyeR: 2.8, jawMax: 0.6, teeth: 6, toothL: 3.6, walk: 7.5, lunge: 15, stride: 14, iris: '#f0c040', atkTilt: 0.12, atkNeck: 0.05, atkHead: 0.25, eatNeck: 1.0, eatHead: 0.95 },
     spino:  { hipX: -8, hipH: 48, thigh: 24, shin: 22, meta: 12, legW: 18, bodyLen: 56, up: 16, dn: 19, neckLen: 28, neckW: 13, neckAng: -0.72, headAng: 0.1, headLen: 50, headH: 13.5, tailLen: 76, tailW: 15, tailFin: 6, tailAng: 0.05, armLen: 22, armW: 6.5, fingers: 3, clawL: 5, eyeR: 2.6, jawMax: 0.5, teeth: 11, toothL: 3.2, walk: 6, lunge: 14, stride: 11, iris: '#d9b030', atkTilt: 0.1, atkNeck: 0.1, atkHead: 0.15, eatNeck: 0.95, eatHead: 0.85 },
-    raptor: { hipX: -4, hipH: 50, thigh: 23, shin: 24, meta: 13, legW: 12, bodyLen: 38, up: 11, dn: 12.5, neckLen: 24, neckW: 9, neckAng: -1.0, headAng: 0.12, headLen: 29, headH: 11.5, tailLen: 72, tailW: 9.5, tailAng: 0.0, armLen: 22, armW: 4.5, fingers: 3, clawL: 4, eyeR: 2.7, jawMax: 0.6, teeth: 8, toothL: 2.6, walk: 10, lunge: 18, stride: 15, iris: '#e8c23a', atkTilt: 0.14, atkNeck: 0.0, atkHead: 0.2, eatNeck: 1.05, eatHead: 0.9 },
+    raptor: { hipX: -4, hipH: 50, thigh: 23, shin: 24, meta: 13, legW: 12.5, bodyLen: 38, up: 12, dn: 14, neckLen: 24, neckW: 10, neckAng: -1.0, headAng: 0.12, headLen: 33, headH: 13, tailLen: 72, tailW: 9.5, tailAng: 0.0, armLen: 22, armW: 4.5, fingers: 3, clawL: 4, eyeR: 2.7, jawMax: 0.6, teeth: 8, toothL: 2.6, walk: 10, lunge: 18, stride: 15, iris: '#e8c23a', atkTilt: 0.14, atkNeck: 0.0, atkHead: 0.2, eatNeck: 1.05, eatHead: 0.9 },
     dilo:   { hipX: -5, hipH: 54, thigh: 25, shin: 25, meta: 14, legW: 14, bodyLen: 42, up: 12.5, dn: 14, neckLen: 30, neckW: 10, neckAng: -1.0, headAng: 0.12, headLen: 32, headH: 12.5, tailLen: 74, tailW: 11, tailAng: 0.04, armLen: 18, armW: 4.5, fingers: 3, clawL: 3.5, eyeR: 2.7, jawMax: 0.65, teeth: 8, toothL: 2.8, walk: 8, lunge: 15, stride: 14, iris: '#e6d040', atkTilt: 0.12, atkNeck: 0.0, atkHead: 0.2, eatNeck: 1.05, eatHead: 0.9 },
   };
+  TH.lava = Object.assign({}, TH.rex, { legW: 27, bodyLen: 52, headLen: 54, headH: 29, tailLen: 76, iris: '#ffb020' });
   // Skull profiles normalised to (length, height); origin = neck attach, mouth line ≈ y 0.2.
   const SKULL = {
     allo: {
@@ -538,9 +565,9 @@
       eye: [0.24, -0.27], nos: [0.88, -0.12], tUp: [0.3, 0.23, 0.95, 0.17], tLo: [0.3, 0.2, 0.9, 0.19], rim: [2, 6],
     },
     rex: {
-      up: [[-0.1, 0.34], [-0.15, -0.12], [-0.05, -0.55], [0.16, -0.68], [0.42, -0.56], [0.72, -0.4], [0.94, -0.22], [1.02, 0.02], [0.96, 0.19], [0.58, 0.25], [0.2, 0.3]],
-      lo: [[0.04, 0.18], [0.9, 0.2], [0.96, 0.28], [0.86, 0.44], [0.5, 0.6], [0.14, 0.64], [-0.06, 0.46]],
-      eye: [0.22, -0.32], nos: [0.9, -0.12], tUp: [0.3, 0.26, 0.96, 0.18], tLo: [0.3, 0.22, 0.9, 0.21], rim: [2, 6],
+      up: [[-0.1, 0.36], [-0.17, -0.14], [-0.07, -0.6], [0.13, -0.74], [0.36, -0.66], [0.62, -0.48], [0.86, -0.33], [1.0, -0.13], [1.03, 0.06], [0.96, 0.2], [0.58, 0.26], [0.2, 0.31]],
+      lo: [[0.04, 0.18], [0.9, 0.2], [0.97, 0.28], [0.88, 0.46], [0.56, 0.64], [0.18, 0.72], [-0.07, 0.52]],
+      eye: [0.21, -0.36], nos: [0.92, -0.1], tUp: [0.3, 0.27, 0.97, 0.19], tLo: [0.3, 0.22, 0.9, 0.21], rim: [2, 7],
     },
     giga: {
       up: [[-0.08, 0.3], [-0.13, -0.1], [-0.03, -0.5], [0.18, -0.6], [0.46, -0.5], [0.76, -0.36], [0.96, -0.2], [1.03, 0.02], [0.97, 0.17], [0.58, 0.23], [0.2, 0.27]],
@@ -568,6 +595,7 @@
       eye: [0.25, -0.23], nos: [0.92, -0.1], tUp: [0.3, 0.22, 0.97, 0.15], tLo: [0.3, 0.18, 0.9, 0.17], rim: [2, 6],
     },
   };
+  SKULL.lava = SKULL.rex;
   // Babies: shorter snout, rounder cranium (cached per kind and stage).
   const skullCache = new Map();
   function skull(vk, st) {
@@ -577,7 +605,7 @@
     const B = SKULL[vk], sn = [0.68, 0.85, 1, 1][st], cr = [1.28, 1.1, 1, 1][st];
     const f = p => [p[0] > 0.3 ? 0.3 + (p[0] - 0.3) * sn : p[0], p[1] < -0.25 ? -0.25 + (p[1] + 0.25) * cr : p[1]];
     const a = f([B.tUp[0], B.tUp[1]]), b = f([B.tUp[2], B.tUp[3]]), c = f([B.tLo[0], B.tLo[1]]), d = f([B.tLo[2], B.tLo[3]]);
-    K = { up: B.up.map(f), lo: B.lo.map(f), eye: f(B.eye), nos: f(B.nos), tUp: [a[0], a[1], b[0], b[1]], tLo: [c[0], c[1], d[0], d[1]], hinge: [0.04, 0.17], rim: B.rim };
+    K = { up: B.up.map(f), lo: B.lo.map(f), eye: f(B.eye), nos: f(B.nos), tUp: [a[0], a[1], b[0], b[1]], tLo: [c[0], c[1], d[0], d[1]], hinge: [0.04, 0.17], rim: B.rim, f };
     skullCache.set(key, K);
     return K;
   }
@@ -585,7 +613,8 @@
   function theroKind(sp) {
     let k = kindCache.get(sp.id);
     if (k) return k;
-    k = has(sp, 'small') || has(sp, 'feathers') ? 'raptor'
+    k = has(sp, 'lava') ? 'lava'
+      : has(sp, 'small') || has(sp, 'feathers') ? 'raptor'
       : has(sp, 'double_crest') || has(sp, 'frill_neck') ? 'dilo'
       : has(sp, 'bull_horns') ? 'carno'
       : has(sp, 'sail') || has(sp, 'croc_snout') ? 'spino'
@@ -599,14 +628,16 @@
     const P = X.P, S = X.S, st = X.st, fk = S.feat, K = skull(vk, st);
     const L = V.headLen * S.head * (st === 0 ? 0.92 : 1), Hh = V.headH * S.head * (st === 0 ? 1.12 : 1);
     const jawA = X.jw * V.jawMax;
-    const pt = p => [p[0] * L, p[1] * Hh];
+    const pt = p => [p[0] * L, p[1] * Hh], fp = p => pt(K.f(p)); // fp: stage-aware point for ornaments
     const up = K.up.map(pt), lo = K.lo.map(pt), hg = pt(K.hinge);
+    const jawLow = [rotAround(lo[2], hg, jawA), rotAround(lo[4], hg, jawA), rotAround(lo[5], hg, jawA)];
+    hA = clampHead(ne, hA - jawA * 0.3, [up[7], up[8]].concat(jawLow), 1) + jawA * 0.3;
     ctx.save();
     ctx.translate(ne[0], ne[1]);
     ctx.rotate(hA - jawA * 0.3);
 
     // far-side ornaments (behind the skull)
-    if (vk === 'carno' && fk > 0.3) horn(ctx, X, 0.36 * L, -0.55 * Hh, 0.3 * L - 4 * fk, -0.55 * Hh - 11 * fk, 6 * Math.sqrt(fk), -0.25, P.hornFar);
+    if (vk === 'carno' && fk > 0.3) { const b = fp([0.38, -0.55]); horn(ctx, X, b[0], b[1], b[0] - 2 - 4 * fk, b[1] - 11 * fk, 6 * Math.sqrt(fk), -0.25, P.hornFar); }
     if (vk === 'dilo') diloCrest(ctx, X, L, Hh, fk, true);
     if (vk === 'raptor') {
       // feather crest at the back of the head
@@ -636,12 +667,15 @@
       H.ellipse(ctx, 0.52 * L, 0.3 * Hh, 0.64 * L, 0.15 * Hh);
       ctx.fillStyle = P.bellyA; ctx.fill();
       if (sp.pattern === 'spots') H.spots(ctx, sp.seed + 9, -0.1 * L, -0.65 * Hh, 0.7 * L, 0, 5, 1, 2.2 * (st === 3 ? 1.3 : 1), P.pat);
-      texture(ctx, P, sp.seed + 3, -0.15 * L, -0.75 * Hh, 1.05 * L, 0.3 * Hh, 26, 0.5, 1.3);
-      if (vk === 'rex' || vk === 'giga') {
-        // heavy jaw muscle shadow behind the eye
-        H.ellipse(ctx, 0.08 * L, 0.05 * Hh, 0.16 * L, 0.3 * Hh);
-        ctx.fillStyle = 'rgba(30,15,8,.14)'; ctx.fill();
-      }
+      texture(ctx, P, sp.seed + 3, -0.15 * L, -0.75 * Hh, 1.05 * L, 0.3 * Hh, 22, 0.5, 1.3);
+      // antorbital depression in front of the eye and jaw muscle shadow behind it
+      const ao = fp([0.5, -0.12]);
+      H.ellipse(ctx, ao[0], ao[1], 0.17 * L * (st === 0 ? 0.7 : 1), 0.14 * Hh, -0.15);
+      ctx.fillStyle = 'rgba(30,15,8,.15)'; ctx.fill();
+      ctx.strokeStyle = 'rgba(255,245,225,.18)'; ctx.lineWidth = 1.2; ctx.beginPath();
+      ctx.ellipse(ao[0], ao[1] + 1, 0.17 * L * (st === 0 ? 0.7 : 1), 0.14 * Hh, -0.15, 0.2, PI - 0.2); ctx.stroke();
+      H.ellipse(ctx, 0.06 * L, 0.06 * Hh, (vk === 'rex' || vk === 'giga' ? 0.17 : 0.12) * L, 0.3 * Hh);
+      ctx.fillStyle = 'rgba(30,15,8,.13)'; ctx.fill();
       openPath(ctx, up.slice(K.rim[0], K.rim[1] + 1).map(p => [p[0], p[1] + 1.6]));
       ctx.lineWidth = 2.4; ctx.strokeStyle = P.rim; ctx.stroke();
     });
@@ -655,21 +689,28 @@
     ctx.fillStyle = 'rgba(25,12,6,.75)'; ctx.fill();
     // ornaments in front of the skull
     if (vk === 'allo') {
-      horn(ctx, X, 0.2 * L, -0.56 * Hh, 0.17 * L, -0.56 * Hh - 9 * fk, 6 * Math.sqrt(fk), 0.1, P.horn);
-      bumps(ctx, X, pt([0.45, -0.5]), pt([0.85, -0.27]), 4, 1.6 * Math.sqrt(fk) + 0.4);
+      // keratin horn in front of the eye + paired nasal ridges
+      const hb = fp([0.24, -0.6]);
+      ridge(ctx, X, fp([0.42, -0.5]), fp([0.88, -0.25]), 2.2 * fk + 0.8, H.mix(P.acc, P.body, 0.35));
+      if (fk > 0.25) horn(ctx, X, hb[0], hb[1] + 1, hb[0] - 2 * fk, hb[1] - 12 * fk, 8 * Math.sqrt(fk), 0.18, H.mix(P.acc, '#e8c8a0', 0.25));
     } else if (vk === 'rex') {
-      bumps(ctx, X, pt([0.26, -0.64]), pt([0.36, -0.6]), 2, 2.2 * Math.sqrt(fk) + 0.5);
-      bumps(ctx, X, pt([0.55, -0.5]), pt([0.88, -0.27]), 4, 1.3 * Math.sqrt(fk) + 0.3);
+      bumps(ctx, X, fp([0.24, -0.7]), fp([0.34, -0.66]), 2, 2.4 * Math.sqrt(fk) + 0.5);
+      bumps(ctx, X, fp([0.55, -0.54]), fp([0.9, -0.3]), 5, 1.1 * Math.sqrt(fk) + 0.3);
+    } else if (vk === 'lava') {
+      if (fk > 0.3) for (let i = 0; i < 2; i++) { const b = fp([0.02 + i * 0.1, -0.62 - i * 0.04]); horn(ctx, X, b[0], b[1], b[0] - 6 * fk, b[1] - (7 + 3 * i) * fk, 5, -0.2, '#2a211d'); }
+      bumps(ctx, X, fp([0.12, -0.66]), fp([0.36, -0.64]), 4, 2.4 * Math.sqrt(fk) + 0.4);
+      glowLines(ctx, X, [[fp([0.08, -0.42]), fp([0.2, -0.3]), fp([0.34, -0.4]), fp([0.46, -0.26])], [fp([0.55, -0.44]), fp([0.66, -0.3]), fp([0.8, -0.32])], [fp([0.16, 0.02]), fp([0.3, 0.1]), fp([0.42, 0.04])]], 0.9 + X.st * 0.15);
     } else if (vk === 'giga') {
-      bumps(ctx, X, pt([0.06, -0.55]), pt([0.36, -0.58]), 5, 2.2 * Math.sqrt(fk) + 0.4);
-      bumps(ctx, X, pt([0.48, -0.48]), pt([0.9, -0.24]), 5, 1.3 * Math.sqrt(fk) + 0.3);
+      bumps(ctx, X, fp([0.06, -0.55]), fp([0.34, -0.6]), 5, 2.3 * Math.sqrt(fk) + 0.4);
+      ridge(ctx, X, fp([0.42, -0.5]), fp([0.92, -0.22]), 2.4 * fk + 0.6, P.light);
     } else if (vk === 'carno' && fk > 0.3) {
-      horn(ctx, X, 0.32 * L, -0.56 * Hh, 0.24 * L - 6 * fk, -0.56 * Hh - 13 * fk, 7.5 * Math.sqrt(fk), -0.3, P.horn);
+      const b = fp([0.33, -0.57]);
+      horn(ctx, X, b[0], b[1], b[0] - 2 - 6 * fk, b[1] - 13 * fk, 7.5 * Math.sqrt(fk), -0.3, P.horn);
     } else if (vk === 'dilo') {
       diloCrest(ctx, X, L, Hh, fk, false);
     }
     const ep = pt(K.eye);
-    eye(ctx, X, ep[0], ep[1], V.eyeR * S.eye, { iris: st === 3 ? P.glow : V.iris, pupil: st === 0 ? 'round' : 'slit', brow: st > 0 });
+    eye(ctx, X, ep[0], ep[1], V.eyeR * S.eye, { iris: st === 3 || vk === 'lava' ? P.glow : V.iris, pupil: st === 0 ? 'round' : 'slit', brow: st > 0 });
     if (st === 3) scarLines(ctx, X, [[pt([0.5, -0.5]), pt([0.62, -0.12])], [pt([0.58, -0.48]), pt([0.68, -0.18])]], 1);
     ctx.restore();
   }
@@ -683,6 +724,36 @@
     }
     ctx.fillStyle = P.light; ctx.fill();
     ctx.strokeStyle = P.ink; ctx.lineWidth = 1; ctx.stroke();
+  }
+  /** Seeded lava-crack polylines in trunk parameter space ([u = joint index, f = thickness offset]). */
+  const crackCache = new Map();
+  function crackDefs(seed, n) {
+    const key = seed * 100 + n;
+    let d = crackCache.get(key);
+    if (d) return d;
+    const r = H.rng(seed * 77 + 5);
+    d = [];
+    for (let i = 0; i < n; i++) {
+      let u = 1.4 + (i + r()) / n * 6.6, f = -0.65 + r() * 1.1;
+      const c = [[u, f]], du = (r() < 0.5 ? -1 : 1) * 0.16;
+      for (let j = 0; j < 4; j++) { u += du + (r() - 0.5) * 0.14; f = clamp(f + (r() - 0.5) * 0.55, -0.85, 0.85); c.push([u, f]); }
+      d.push(c);
+    }
+    crackCache.set(key, d);
+    return d;
+  }
+  function lavaCracks(ctx, X, T, seed) {
+    const segs = crackDefs(seed, [3, 5, 7, 9][X.st]).map(c => c.map(q => { const p = along(T, clamp(q[0], 0.4, T.n - 1.3), q[1]); return [p[0], p[1]]; }));
+    glowLines(ctx, X, segs, 1.1 + X.st * 0.18);
+  }
+  /** Low keratin ridge along the snout (allosaur, giganotosaur). */
+  function ridge(ctx, X, a, b, h, col) {
+    const P = X.P, dx = b[0] - a[0], dy = b[1] - a[1], l = Math.hypot(dx, dy) || 1, nx = dy / l, ny = -dx / l;
+    const pts = [a];
+    for (let i = 1; i < 6; i++) { const p = lerpPt(a, b, i / 6), hh = h * (i % 2 ? 1 : 0.55) * (1 - i / 9); pts.push([p[0] + nx * hh, p[1] + ny * hh]); }
+    pts.push(b);
+    H.smooth(ctx, pts, true, 0.3);
+    H.fillStroke(ctx, col, P.ink, 1);
   }
   function diloCrest(ctx, X, L, Hh, fk, far) {
     const P = X.P, h = (0.35 + 0.65 * fk) * Hh * 0.9, o = far ? [0.05 * L, -0.12 * Hh] : [0, 0];
@@ -760,19 +831,28 @@
     biped(ctx, sp, X, V, {
       sickle: vk === 'raptor',
       armFeather: vk === 'raptor',
+      noChevrons: vk === 'lava',
       behind(R) {
+        if (vk === 'lava' && fk > 0.3) {
+          // basalt dorsal spikes
+          for (let i = 0; i < 9; i++) {
+            const q = along(R.T, 1.8 + i * 0.68, -0.7), l = (3 + 6 * fk) * (0.6 + 0.4 * Math.sin(PI * i / 8));
+            horn(ctx, X, q[0], q[1], q[0] - q[2] * l - 2, q[1] - q[3] * l, 5, -0.1, '#241c19', 1.4);
+          }
+        }
         if (vk === 'spino') spinoSail(ctx, X, sp, R.T, 3.2, 6.6, (12 + 42 * fk) * (st === 0 ? 0.8 : 1));
         if (vk === 'dilo') diloFrill(ctx, X, R);
         if (vk === 'raptor') {
           // tail feather fan
           const T = R.T;
-          for (let i = 0; i < 7; i++) {
-            const u = 0.2 + i * 0.3, q = along(T, u, i % 2 ? -0.6 : 0.6), d = lerpPt(T.joints[0], T.joints[1], 0.5);
-            const a = Math.atan2(T.joints[0][1] - T.joints[2][1], T.joints[0][0] - T.joints[2][0]) + (i % 2 ? -0.5 : 0.5) * (1 - i * 0.08);
-            const l = 12 - i * 0.6;
-            H.ellipse(ctx, q[0] + Math.cos(a) * l * 0.45, q[1] + Math.sin(a) * l * 0.45, l * 0.55, 2, a);
-            H.fillStroke(ctx, i % 3 ? P.dark : H.shade(P.acc, -0.1), P.ink, 1);
-            if (d) continue;
+          // feathered frond along the distal tail (longest feathers towards the tip)
+          const fl = st === 0 ? 0.6 : st === 3 ? 1.2 : 1;
+          for (let i = 11; i >= 0; i--) {
+            const u = 0.05 + i * 0.24, side = i % 2 ? -1 : 1, q = along(T, u, side * 0.55);
+            const j = Math.min(T.n - 1, Math.ceil(u + 0.01)), dirA = Math.atan2(T.joints[0][1] - T.joints[j][1], T.joints[0][0] - T.joints[j][0]);
+            const a = dirA + side * (0.35 + u * 0.18), l = (14 - u * 2.6) * fl;
+            H.ellipse(ctx, q[0] + Math.cos(a) * l * 0.48, q[1] + Math.sin(a) * l * 0.48, l * 0.55, 2, a);
+            H.fillStroke(ctx, i % 3 ? P.dark : H.mix(P.acc, P.body, 0.3), P.ink, 0.9);
           }
         }
       },
@@ -780,13 +860,18 @@
         const T = R.T;
         if (vk === 'carno') {
           // rows of osteoderm knobs
-          ctx.beginPath();
-          for (let row = 0; row < 2; row++) for (let i = 0; i < 7; i++) {
-            const q = along(T, 3.4 + i * 0.5, row ? -0.15 : -0.6), r = (row ? 1.5 : 2) * (0.6 + 0.4 * fk);
-            ctx.moveTo(q[0] + r, q[1]); ctx.arc(q[0], q[1], r, 0, TAU);
+          const knobs = [];
+          for (let row = 0; row < 3; row++) for (let i = 0; i < 8 - row; i++) {
+            const q = along(T, 3.2 + i * 0.5 + row * 0.25, [-0.7, -0.35, 0.05][row]);
+            knobs.push([q[0], q[1], (row ? 1.4 : 1.9) * (0.6 + 0.4 * fk)]);
           }
-          ctx.fillStyle = P.light; ctx.fill();
-          ctx.strokeStyle = P.ink; ctx.lineWidth = 0.9; ctx.stroke();
+          ctx.beginPath();
+          for (const k of knobs) { ctx.moveTo(k[0] + k[2], k[1]); ctx.arc(k[0], k[1], k[2], 0, TAU); }
+          ctx.fillStyle = H.shade(P.body, -0.12); ctx.fill();
+          ctx.strokeStyle = H.rgba(P.ink, 0.55); ctx.lineWidth = 0.7; ctx.stroke();
+          ctx.beginPath();
+          for (const k of knobs) { ctx.moveTo(k[0] - k[2] * 0.2, k[1] - k[2] * 0.35); ctx.arc(k[0] - k[2] * 0.35, k[1] - k[2] * 0.35, k[2] * 0.45, 0, TAU); }
+          ctx.fillStyle = H.rgba(P.light, 0.8); ctx.fill();
         }
         if (vk === 'raptor' || st === 0 && (vk === 'rex' || vk === 'giga')) {
           // feather fluff along neck and back (baby big theropods are fluffy too)
@@ -798,9 +883,10 @@
             ctx.moveTo(q[0], q[1]);
             ctx.quadraticCurveTo(q[0] + bx * l * 0.6 - by * l * 0.2, q[1] + by * l * 0.6 + bx * l * 0.2, q[0] + bx * l * 0.7 - by * l * 0.9, q[1] + by * l * 0.7 + bx * l * 0.9);
           }
-          ctx.strokeStyle = H.shade(P.dark, -0.1); ctx.lineWidth = 2; ctx.lineCap = 'round'; ctx.stroke();
-          ctx.strokeStyle = H.rgba(P.acc, 0.6); ctx.lineWidth = 0.9; ctx.stroke();
+          ctx.strokeStyle = H.shade(P.dark, -0.15); ctx.lineWidth = 2.6; ctx.lineCap = 'round'; ctx.stroke();
+          ctx.strokeStyle = H.mix(P.acc, P.body, 0.35); ctx.lineWidth = 1.3; ctx.stroke();
         }
+        if (vk === 'lava') lavaCracks(ctx, X, T, sp.seed);
         if (vk === 'rex' || vk === 'giga' || vk === 'allo') {
           // small dorsal scutes
           ctx.beginPath();
@@ -812,7 +898,7 @@
     });
     ctx.restore();
   }
-  ART.registerTemplate('theropod', theropod, { bounds: [-100, -128, 106, 4], shadowW: 120 });
+  ART.registerTemplate('theropod', theropod, { bounds: [-104, -139, 150, 4], shadowW: 110 });
 
   // ===================================================================
   // ORNITHOMIMID (gallimimus): ostrich-like runner, long S-neck, beak
@@ -825,17 +911,18 @@
         if (st === 3) glowLines(ctx, X, [[along(R.T, 6.4, -0.3), along(R.T, 7.2, -0.4), along(R.T, 8, -0.5)].map(q => [q[0], q[1]])], 1.3);
         // soft feather fringe on the forearm area / back
         ctx.beginPath();
-        for (let i = 0; i < 8; i++) {
-          const q = along(R.T, 3.6 + i * 0.3, -0.9), l = 4 + (i % 2) * 2;
-          ctx.moveTo(q[0], q[1]); ctx.lineTo(q[0] - l * 0.8, q[1] - l * 0.6);
+        for (let i = 0; i < 6; i++) {
+          const q = along(R.T, 3.4 + i * 0.42, -0.92), l = 3 + (i % 2) * 1.5;
+          ctx.moveTo(q[0], q[1]); ctx.quadraticCurveTo(q[0] - l * 0.4, q[1] - l * 0.7, q[0] - l, q[1] - l * 0.5);
         }
-        ctx.strokeStyle = H.rgba(P.dark, 0.7); ctx.lineWidth = 1.6; ctx.lineCap = 'round'; ctx.stroke();
+        ctx.strokeStyle = H.rgba(P.dark, 0.4); ctx.lineWidth = 1.3; ctx.lineCap = 'round'; ctx.stroke();
       },
       head(R) {
         const hs = S.head * 1.0, jawA = X.jw * 0.45;
+        const hA = clampHead(R.ne, R.hA - jawA * 0.3, [[27, 1], [24, 3 + jawA * 20], [12, 7 + jawA * 10]], hs);
         ctx.save();
         ctx.translate(R.ne[0], R.ne[1]);
-        ctx.rotate(R.hA - jawA * 0.3);
+        ctx.rotate(hA);
         ctx.scale(hs, hs);
         const lw = LW / hs;
         const sk = [[-3, 4], [-4, -3], [3, -8.5], [10, -8.5], [16, -5], [24, -1.2], [27, 1], [24, 3], [12, 4], [2, 5]];
@@ -856,7 +943,7 @@
     });
     ctx.restore();
   }
-  ART.registerTemplate('ornithomimid', ornithomimid, { bounds: [-80, -128, 72, 4], shadowW: 80 });
+  ART.registerTemplate('ornithomimid', ornithomimid, { bounds: [-84, -127, 113, 4], shadowW: 80 });
 
   // ===================================================================
   // PACHY (pachycephalosaurus): bipedal, thick bony dome ringed with knobs; attack = head-butt
@@ -867,9 +954,10 @@
     biped(ctx, sp, X, PACHY, {
       head(R) {
         const hs = S.head, jawA = X.jw * 0.3, dk = [0.42, 0.7, 1, 1.18][st];
+        const hA = clampHead(R.ne, R.hA - jawA * 0.3, [[38, 2], [34, 8 + jawA * 25], [22, 12 + jawA * 15], [-6, 8]], hs);
         ctx.save();
         ctx.translate(R.ne[0], R.ne[1]);
-        ctx.rotate(R.hA - jawA * 0.3);
+        ctx.rotate(hA);
         ctx.scale(hs, hs);
         const lw = LW / hs;
         const d = y => (y < -8 ? -8 + (y + 8) * dk : y); // dome height scales with stage
@@ -885,7 +973,7 @@
           texture(ctx, P, sp.seed + 3, -8, -12, 38, 9, 18, 0.5, 1.2);
         }, lw);
         // bony dome
-        const bone = H.mix('#efe0bf', P.body, 0.25);
+        const bone = H.mix('#e6d3ae', P.body, 0.35);
         paintShape(ctx, X, () => H.smooth(ctx, dome, true, 0.5), H.radial(ctx, 6, d(-20), 1, 20 * dk + 6, [[0, H.shade(bone, 0.35)], [0.6, bone], [1, H.shade(bone, -0.3)]]), () => {
           if (st === 3) { ctx.strokeStyle = 'rgba(90,60,40,.35)'; ctx.lineWidth = 0.9; ctx.beginPath(); ctx.moveTo(4, d(-22)); ctx.lineTo(9, d(-16)); ctx.lineTo(7, d(-12)); ctx.stroke(); }
         }, lw);
@@ -902,12 +990,22 @@
     });
     ctx.restore();
   }
-  ART.registerTemplate('pachy', pachy, { bounds: [-84, -100, 86, 4], shadowW: 84 });
+  ART.registerTemplate('pachy', pachy, { bounds: [-85, -110, 108, 4], shadowW: 90 });
 
   // ===================================================================
   // CERATOPSIAN (triceratops, styracosaurus)
-  const FRILL_T = [[12, 2], [13, -16], [5, -33], [-9, -43], [-25, -42], [-37, -31], [-40, -15], [-33, 0], [-19, 8], [-3, 9]];
-  const FRILL_S = [[12, 2], [12, -14], [4, -27], [-8, -34], [-21, -33], [-30, -24], [-32, -11], [-26, 0], [-15, 7], [-3, 8]];
+  // Frill outline: tilted ellipse; index 0 sits behind the skull, 3 = front-top, 6 = far tip, 9 = back-bottom.
+  const frillPts = (cx, cy, a, b, rot) => {
+    const out = [];
+    for (let i = 0; i < 12; i++) {
+      const t = PI - i / 12 * TAU, x = Math.cos(t) * a, y = Math.sin(t) * b;
+      out.push([cx + x * Math.cos(rot) - y * Math.sin(rot), cy + x * Math.sin(rot) + y * Math.cos(rot)]);
+    }
+    out.c = [cx, cy];
+    return out;
+  };
+  const FRILL_T = frillPts(-14, -20, 33, 22, -2.3);
+  const FRILL_S = frillPts(-11, -16, 26, 19, -2.3);
   function polyAt(pts, u) {
     const i = clamp(Math.floor(u), 0, pts.length - 2);
     return lerpPt(pts[i], pts[i + 1], u - i);
@@ -916,47 +1014,51 @@
     const P = X.P, S = X.S, st = X.st, fk = S.feat;
     const hs = S.head * (st === 0 ? 0.88 : 1), fr = [0.48, 0.76, 1, 1.12][st];
     const jawA = X.jw * 0.32, lw = LW / hs;
+    hA = clampHead(ne, hA, [[60, 14], [58, 18], [50, 22 + jawA * 40], [30, 25 + jawA * 25], [12, 20]], hs);
     ctx.save();
     ctx.translate(ne[0], ne[1]);
     ctx.rotate(hA);
     ctx.scale(hs, hs);
     // frill
-    const anc = [8, 0], FR = (styr ? FRILL_S : FRILL_T).map(p => [anc[0] + (p[0] - anc[0]) * fr, anc[1] + (p[1] - anc[1]) * fr]);
-    const fc = [anc[0] - 18 * fr, -16 * fr];
+    const anc = [8, 0], F0 = styr ? FRILL_S : FRILL_T, sc = p => [anc[0] + (p[0] - anc[0]) * fr, anc[1] + (p[1] - anc[1]) * fr];
+    const FR = F0.map(sc), fc = sc(F0.c);
     if (styr && fk > 0.15) {
       const L = [14, 24, 30, 30, 24, 15];
       for (let i = 0; i < 6; i++) {
-        const p = polyAt(FR, 2 + i * 0.95), dx = p[0] - fc[0], dy = p[1] - fc[1], l = Math.hypot(dx, dy) || 1;
+        const p = polyAt(FR, 3.4 + i * 0.95), dx = p[0] - fc[0], dy = p[1] - fc[1], l = Math.hypot(dx, dy) || 1;
         const len = L[i] * fk * (0.75 + 0.25 * fr);
         horn(ctx, X, p[0] - dx / l * 3, p[1] - dy / l * 3, p[0] + dx / l * len, p[1] + dy / l * len, 6.5 * Math.sqrt(fk), i < 3 ? 0.06 : -0.06, i % 2 ? P.hornFar : P.horn, lw * 0.9);
       }
     }
     paintShape(ctx, X, () => H.smooth(ctx, FR, true, 0.5), H.radial(ctx, fc[0], fc[1], 0, 42 * fr, [[0, P.dark], [0.5, P.body], [1, H.mix(P.body, P.acc, 0.6)]]), () => {
-      H.smooth(ctx, FR, true, 0.5); ctx.lineWidth = 9 * fr; ctx.strokeStyle = P.patAcc; ctx.stroke();
+      H.smooth(ctx, FR, true, 0.5); ctx.lineWidth = 10 * fr; ctx.strokeStyle = P.patAcc; ctx.stroke();
+      // inner band following the rim, then the species pattern
+      H.smooth(ctx, FR.map(p => lerpPt(fc, p, 0.7)), true, 0.5); ctx.lineWidth = 2.5 * fr + 1; ctx.strokeStyle = sp.pattern === 'stripes' ? P.pat : H.rgba(P.ink, 0.18); ctx.stroke();
       if (sp.pattern === 'stripes') {
         ctx.beginPath();
-        for (let i = 0; i < 7; i++) { const p = polyAt(FR, 1.4 + i * 0.95); ctx.moveTo(lerp(fc[0], p[0], 0.35), lerp(fc[1], p[1], 0.35)); ctx.lineTo(lerp(fc[0], p[0], 0.85), lerp(fc[1], p[1], 0.85)); }
-        ctx.strokeStyle = P.pat; ctx.lineWidth = 3.4 * fr + 1; ctx.lineCap = 'round'; ctx.stroke();
+        for (let i = 0; i < 8; i++) { const p = polyAt(FR, 2.6 + i * 0.95); ctx.moveTo(lerp(fc[0], p[0], 0.74), lerp(fc[1], p[1], 0.74)); ctx.lineTo(lerp(fc[0], p[0], 0.9), lerp(fc[1], p[1], 0.9)); }
+        ctx.strokeStyle = P.pat; ctx.lineWidth = 3 * fr + 1; ctx.lineCap = 'round'; ctx.stroke();
       }
       texture(ctx, P, sp.seed + 11, fc[0] - 30 * fr, fc[1] - 30 * fr, fc[0] + 30 * fr, fc[1] + 26 * fr, 26, 0.6, 1.5);
       // ridge where frill meets the skull
       ctx.strokeStyle = 'rgba(30,15,8,.22)'; ctx.lineWidth = 3;
-      ctx.beginPath(); ctx.moveTo(8, 6); ctx.quadraticCurveTo(-2 * fr, -10 * fr, 4, -26 * fr); ctx.stroke();
-      openPath(ctx, FR.slice(1, 6).map(p => [p[0] + 0.8, p[1] + 1.6])); ctx.strokeStyle = P.rim; ctx.lineWidth = 2.2; ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(9, 8); ctx.quadraticCurveTo(-1 * fr, -10 * fr, 6, -28 * fr); ctx.stroke();
+      openPath(ctx, FR.slice(2, 7).map(p => [p[0] + 0.8, p[1] + 1.6])); ctx.strokeStyle = P.rim; ctx.lineWidth = 2.2; ctx.stroke();
     }, lw);
     if (!styr && st > 0) {
       // epoccipitals along the rim
       ctx.beginPath();
       for (let i = 0; i < 11; i++) {
-        const p = polyAt(FR, 1.2 + i * 0.6), dx = p[0] - fc[0], dy = p[1] - fc[1], l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l, s = 2.4 * fr + 0.6;
+        const p = polyAt(FR, 2.3 + i * 0.72), dx = p[0] - fc[0], dy = p[1] - fc[1], l = Math.hypot(dx, dy) || 1, ux = dx / l, uy = dy / l, s = 2.4 * fr + 0.6;
         ctx.moveTo(p[0] - uy * s, p[1] + ux * s); ctx.lineTo(p[0] + ux * s * 1.7, p[1] + uy * s * 1.7); ctx.lineTo(p[0] + uy * s, p[1] - ux * s);
       }
       ctx.fillStyle = P.horn; ctx.fill();
       ctx.strokeStyle = P.ink; ctx.lineWidth = lw * 0.5; ctx.stroke();
     }
     if (st === 3) {
-      const segs = [FR.slice(2, 8).map(p => lerpPt(fc, p, 0.8))];
-      glowLines(ctx, X, segs, 1.5);
+      // glowing eye-spot arcs on the frill
+      const segs = [[3, 4, 5], [6.6, 7.6, 8.6]].map(us => us.map(u => lerpPt(fc, polyAt(FR, u), 0.6)));
+      glowLines(ctx, X, segs, 1.4);
       scarLines(ctx, X, [[[-10 * fr, -30 * fr], [-2 * fr, -18 * fr], [-4 * fr, -10 * fr]]], 1);
     }
     // far brow horn
@@ -993,14 +1095,14 @@
     const styr = has(sp, 'spiked_frill') || has(sp, 'nose_horn');
     const legK = S.leg, ph = X.t * 6.5, lg = X.lg, rc = X.rc;
     const hipH = 50 * legK, shH = 42 * legK;
-    let bx = 0, by = 0, fy = 0, hA = 0.28;
+    let bx = 0, by = 0, fy = 0, hA = 0.02;
     switch (X.pose) {
-      case 'walk': by = -Math.abs(Math.sin(ph)) * 1.6; hA = 0.3 + Math.sin(ph * 2) * 0.04; break;
-      case 'attack': bx = lg * 18; by = Math.max(0, lg) * 2; fy = Math.max(0, lg) * 3; hA = 0.28 + 0.2 * clamp(lg, 0, 1) - 0.42 * clamp(-lg / 0.3, 0, 1); break;
-      case 'roar': bx = -2; fy = -4; hA = -0.32 + Math.sin(X.t * 30) * 0.02; break;
-      case 'eat': fy = 4; hA = 0.48 + Math.sin(X.t * 4) * 0.05; break;
-      case 'hurt': bx = -9 * rc; fy = -3 * rc; hA = 0.28 - 0.45 * rc; break;
-      default: by = -X.br * 1.2; hA = 0.28 + X.look * 0.1;
+      case 'walk': by = -Math.abs(Math.sin(ph)) * 1.6; hA = 0.05 + Math.sin(ph * 2) * 0.04; break;
+      case 'attack': bx = lg * 18; by = Math.max(0, lg) * 2; fy = Math.max(0, lg) * 3; hA = 0.02 + 0.26 * clamp(lg, 0, 1) - 0.4 * clamp(-lg / 0.3, 0, 1); break;
+      case 'roar': bx = -2; fy = -4; hA = -0.42 + Math.sin(X.t * 30) * 0.02; break;
+      case 'eat': fy = 5; hA = 0.42 + Math.sin(X.t * 4) * 0.05; break;
+      case 'hurt': bx = -9 * rc; fy = -3 * rc; hA = 0.02 - 0.4 * rc; break;
+      default: by = -X.br * 1.2; hA = 0.02 + X.look * 0.1;
     }
     const hip = [-30 + bx, -hipH + by], sh = [26 + bx, -shH + by + fy];
     const ang = Math.atan2(sh[1] - hip[1], sh[0] - hip[0]), bl = Math.hypot(sh[0] - hip[0], sh[1] - hip[1]);
@@ -1018,7 +1120,7 @@
     quadLeg(ctx, X, B(bl, 9), foot(28 + lgF * 0.5 + rcF, ph, -4), fL1, fL2, 12.5, -1, P.far, false);
     paintTrunk(ctx, X, sp, T, G, {
       pat: [T.joints[1][0], T.box[1], T.joints[5][0], T.joints[4][1] + 4], rim: [1, 6],
-      hl: [B(bl * 0.4, 0)[0], B(bl * 0.4, -18)[1], 50], tex: 90,
+      hl: [B(bl * 0.4, 0)[0], B(bl * 0.4, -18)[1], 50], tex: 72,
     });
     if (st === 3) {
       const c = B(bl * 0.55, -6);
@@ -1026,10 +1128,10 @@
     }
     quadLeg(ctx, X, B(2, 9), foot(-26 + lgF * 0.5 + rcF, ph, 4), hL1, hL2, 15.5, 1, G, true);
     quadLeg(ctx, X, B(bl - 5, 10), foot(24 + lgF * 0.8 + rcF, ph + PI, 3), fL1, fL2, 13, -1, G, true);
-    ceratoHead(ctx, X, sp, styr, B(bl + 14, 6), hA);
+    ceratoHead(ctx, X, sp, styr, B(bl + 11, -1), hA);
     ctx.restore();
   }
-  ART.registerTemplate('ceratopsian', ceratopsian, { bounds: [-92, -110, 104, 4], shadowW: 120 });
+  ART.registerTemplate('ceratopsian', ceratopsian, { bounds: [-94, -134, 121, 4], shadowW: 135 });
 
   // ===================================================================
   // STEGOSAUR: arched back with alternating plates, small low head, thagomizer
@@ -1037,14 +1139,14 @@
     const X = poseOf(o, sp), S = X.S, P = X.P, st = X.st, fk = S.feat;
     const legK = S.leg, ph = X.t * 6, lg = X.lg, rc = X.rc;
     const hipH = 56 * legK, shH = 34 * legK;
-    let bx = 0, by = 0, fy = 0, hA = 0.35, whip = 0;
+    let bx = 0, by = 0, fy = 0, hA = 0.25, whip = 0;
     switch (X.pose) {
-      case 'walk': by = -Math.abs(Math.sin(ph)) * 1.5; hA = 0.38 + Math.sin(ph * 2) * 0.04; break;
-      case 'attack': whip = lg; bx = lg * 6; fy = Math.max(0, lg) * 2; hA = 0.45; break;
+      case 'walk': by = -Math.abs(Math.sin(ph)) * 1.5; hA = 0.3 + Math.sin(ph * 2) * 0.04; break;
+      case 'attack': whip = lg; bx = lg * 6; fy = Math.max(0, lg) * 2; hA = 0.4; break;
       case 'roar': fy = -3; hA = -0.25 + Math.sin(X.t * 30) * 0.02; whip = 0.15; break;
       case 'eat': fy = 4; hA = 0.95 + Math.sin(X.t * 4) * 0.05; break;
       case 'hurt': bx = -8 * rc; hA = 0.35 - 0.4 * rc; whip = 0.3 * rc; break;
-      default: by = -X.br * 1.1; hA = 0.35 + X.look * 0.12;
+      default: by = -X.br * 1.1; hA = 0.25 + X.look * 0.12;
     }
     const hip = [-22 + bx, -hipH + by], sh = [30 + bx, -shH + by + fy];
     const ang = Math.atan2(sh[1] - hip[1], sh[0] - hip[0]), bl = Math.hypot(sh[0] - hip[0], sh[1] - hip[1]);
@@ -1052,7 +1154,7 @@
     const walking = X.pose === 'walk';
     const tail = tailJoints(X, B(-4, -3), PI + 0.18 + whip * 0.45 - ang * 0.3, 70 * S.tail, 4, 0.01 + whip * 0.36, walking ? 0.08 : 0.04, 1.5);
     const ch = S.chub;
-    const nk = B(bl + 12, 6), ne = [nk[0] + 10, nk[1] + 5 + (X.pose === 'eat' ? 10 : 0)];
+    const nk = B(bl + 12, 1), ne = [nk[0] + 10, nk[1] + 2 + (X.pose === 'eat' ? 12 : 0)];
     const T = trunk(tail.concat([B(0, -2), B(bl * 0.45, -6), B(bl, 0), nk, ne]),
       [2, 5, 8, 12, 22, 25 * ch, 18, 10, 7], [2, 5, 8, 12, 20, 25 * ch * (1 + X.br * 0.025), 18, 10, 7]);
     ctx.save();
@@ -1066,7 +1168,7 @@
     const plates = [], n = 9;
     for (let i = 0; i < n; i++) {
       const u = lerp(1.4, 7.6, i / (n - 1)), q = along(T, u, -0.75), sz = Math.sin(PI * (0.12 + 0.8 * i / (n - 1)));
-      plates.push({ q, h: (5 + 28 * fk) * sz * (i % 2 ? 0.9 : 1), far: i % 2 === 1 });
+      plates.push({ q, h: (5 + 31 * fk) * sz * (i % 2 ? 0.9 : 1), far: i % 2 === 1 });
     }
     const plate = (pl, col) => {
       const q = pl.q, h = pl.h, w = h * 0.72 + 3, ux = -q[2], uy = -q[3], vx = -uy, vy = ux; // up and along
@@ -1094,7 +1196,7 @@
     spike(0.9, 0.9, sl * 0.95, P.hornFar); spike(0.35, 0.55, sl * 0.9, P.hornFar);
     paintTrunk(ctx, X, sp, T, G, {
       pat: [T.joints[2][0], T.box[1], T.joints[7][0], T.joints[5][1]], rim: [1, 8],
-      hl: [B(bl * 0.35, 0)[0], B(bl * 0.35, -20)[1], 46], tex: 90,
+      hl: [B(bl * 0.35, 0)[0], B(bl * 0.35, -20)[1], 46], tex: 72,
     });
     spike(1.2, 1.25, sl, P.horn); spike(0.6, 0.75, sl * 0.95, P.horn);
     if (st === 3) {
@@ -1105,7 +1207,8 @@
     quadLeg(ctx, X, B(4, 11), foot(-22, ph, 4), hL1, hL2, 16, 1, G, true);
     quadLeg(ctx, X, B(bl - 4, 9), foot(30, ph + PI, 3), fL1, fL2, 11.5, -1, G, true);
     // small head
-    const hs = S.head, jawA = X.jw * 0.3, lw = LW / hs;
+    const hs = S.head * 1.15, jawA = X.jw * 0.3, lw = LW / hs;
+    hA = clampHead(ne, hA, [[29, 5], [26, 8 + jawA * 20], [14, 10 + jawA * 10], [2, 9]], hs);
     ctx.save();
     ctx.translate(ne[0], ne[1]); ctx.rotate(hA); ctx.scale(hs, hs);
     ctx.save(); ctx.translate(2, 5); ctx.rotate(jawA); ctx.translate(-2, -5);
@@ -1121,7 +1224,7 @@
     ctx.restore();
     ctx.restore();
   }
-  ART.registerTemplate('stegosaur', stegosaur, { bounds: [-110, -110, 86, 4], shadowW: 120 });
+  ART.registerTemplate('stegosaur', stegosaur, { bounds: [-118, -141, 92, 4], shadowW: 135 });
 
   // ===================================================================
   // ANKYLOSAUR: low armoured tank, osteoderms, side spikes, club tail
@@ -1132,7 +1235,7 @@
     let bx = 0, by = 0, fy = 0, hA = 0.22, whip = 0;
     switch (X.pose) {
       case 'walk': by = -Math.abs(Math.sin(ph)) * 1.2; hA = 0.25 + Math.sin(ph * 2) * 0.04; break;
-      case 'attack': whip = lg; bx = lg * 6; hA = 0.35; break;
+      case 'attack': whip = lg < 0 ? lg * 0.3 : lg; bx = lg * 6; hA = 0.35; break;
       case 'roar': fy = -3; hA = -0.25 + Math.sin(X.t * 30) * 0.02; whip = 0.12; break;
       case 'eat': fy = 3; hA = 0.8 + Math.sin(X.t * 4) * 0.05; break;
       case 'hurt': bx = -7 * rc; hA = 0.22 - 0.4 * rc; whip = 0.3 * rc; break;
@@ -1202,9 +1305,10 @@
     quadLeg(ctx, X, B(4, 7), foot(-26, ph, 4), hL1, hL2, 14.5, 1, G, true);
     quadLeg(ctx, X, B(bl - 4, 7), foot(26, ph + PI, 3), fL1, fL2, 12.5, -1, G, true);
     // head: wide, low, with back-corner horns and a beak
-    const hs = S.head, jawA = X.jw * 0.28, lw = LW / hs;
+    const hs = S.head, jawA = X.jw * 0.28, lw = LW / hs, hp = [nk[0] + 2, nk[1] + 2];
+    hA = clampHead(hp, hA, [[32, 6], [27, 9 + jawA * 20], [14, 11 + jawA * 10], [-11, 13]], hs);
     ctx.save();
-    ctx.translate(nk[0] + 2, nk[1] + 2); ctx.rotate(hA); ctx.scale(hs, hs);
+    ctx.translate(hp[0], hp[1]); ctx.rotate(hA); ctx.scale(hs, hs);
     if (fk > 0.2) horn(ctx, X, -1, -7, -10 - 4 * fk, -11 - 3 * fk, 6, 0.1, P.hornFar, lw);
     ctx.save(); ctx.translate(2, 6); ctx.rotate(jawA); ctx.translate(-2, -6);
     H.smooth(ctx, [[2, 6], [25, 6], [27, 9], [14, 11], [2, 10]], true, 0.4); H.fillStroke(ctx, P.jaw, P.ink, lw);
@@ -1222,7 +1326,7 @@
     ctx.restore();
     ctx.restore();
   }
-  ART.registerTemplate('ankylosaur', ankylosaur, { bounds: [-112, -86, 80, 4], shadowW: 120 });
+  ART.registerTemplate('ankylosaur', ankylosaur, { bounds: [-122, -121, 78, 4], shadowW: 130 });
 
   // ===================================================================
   // HADROSAUR (parasaurolophus): quadrupedal grazer that rears up on its hind legs; tube crest, duck bill
@@ -1269,7 +1373,7 @@
     quadLeg(ctx, X, B(bl - 1, 8), front(ph, -4), fl1, fl2, 9, -1, P.far, false);
     paintTrunk(ctx, X, sp, T, G, {
       pat: [T.joints[2][0], T.box[1], T.joints[6][0], T.joints[5][1] + 4], rim: [1, 8],
-      hl: [B(bl * 0.4, 0)[0], B(bl * 0.4, -14)[1], 44], tex: 90,
+      hl: [B(bl * 0.4, 0)[0], B(bl * 0.4, -14)[1], 44], tex: 72,
     });
     if (st === 3) {
       const c = B(bl * 0.6, -4);
@@ -1279,6 +1383,7 @@
     quadLeg(ctx, X, B(bl - 6, 9), front(ph + PI, 3), fl1, fl2, 9.5, -1, G, true);
     // head with tube crest and duck bill
     const hs = S.head, jawA = X.jw * 0.32, lw = LW / hs, ck = [0.3, 0.62, 1, 1.18][st];
+    hA = clampHead(ne, hA - jawA * 0.2, [[52, 6], [47, 10 + jawA * 40], [30, 13 + jawA * 25], [8, 13]], hs) + jawA * 0.2;
     ctx.save();
     ctx.translate(ne[0], ne[1]); ctx.rotate(hA - jawA * 0.2); ctx.scale(hs, hs);
     const crest = [[10, -9], [-4 * ck + 2, -18 * ck - 5], [-22 * ck, -28 * ck - 6], [-38 * ck, -34 * ck - 6]];
@@ -1305,61 +1410,90 @@
     ctx.restore();
     ctx.restore();
   }
-  ART.registerTemplate('hadrosaur', hadrosaur, { bounds: [-96, -142, 92, 4], shadowW: 110 });
+  ART.registerTemplate('hadrosaur', hadrosaur, { bounds: [-100, -179, 127, 4], shadowW: 120 });
 
   // ===================================================================
-  // SAUROPOD (brachiosaurus: high neck, long front legs; diplodocus: long low neck, whip tail)
+  // SAUROPOD — brachiosaurus (high neck, long front legs), diplodocus (long low neck, whip tail),
+  // titanosaurus (giant: bulky, rising neck, armoured back)
+  const SAURO = {
+    brach: { hipX: -36, hipH: 58, shX: 26, shH: 74, nA: -1.22, nCurl: 0.1, hA: 0.32, neck: 92, nUp: [16, 12, 9.5, 8], nDn: [17, 12.5, 10, 8], tail: 58, tn: 4, tAng: PI - 0.3, tCurl: -0.02, tUp: [2, 6, 11, 17], tDn: [2, 6, 11, 16], bU: [24, 28, 24], bD: [22, 29, 24], hL: [27, 25], fL: [34, 32], hW: 17, fW: 15, eat: [-1.0, 0.14, 0.7], roarN: -0.22, atkN: -0.12, hs: 1.12,
+      skull: [[-4, 4], [-4, -4], [1, -9], [6, -14], [12, -14], [16, -9], [22, -5], [27, -1], [28, 3], [26, 5], [12, 6], [0, 6]], rimS: [[-2, -4], [3, -10], [8, -13], [13, -12]], nos: [9, -12], eye: [12, -3], top: -14 },
+    diplo: { hipX: -32, hipH: 62, shX: 26, shH: 54, nA: -0.5, nCurl: 0.05, hA: 0.3, neck: 110, nUp: [12.5, 9.5, 7.5, 6.2], nDn: [13.5, 10, 8, 6.4], tail: 114, tn: 6, tAng: PI - 0.42, tCurl: 0.085, tUp: [0.8, 1.6, 3, 5.5, 9.5, 16], tDn: [0.8, 1.6, 3, 5.5, 9.5, 15], bU: [27, 29, 24], bD: [25, 31, 25], hL: [29, 28], fL: [25, 24], hW: 17, fW: 13.5, eat: [0.42, 0.03, 1.05], roarN: -0.45, atkN: -0.4, hs: 1.2, k: 0.86,
+      skull: [[-4, 4], [-5, -3], [4, -7], [14, -6.5], [24, -4], [30, -1], [31, 3], [28, 5], [14, 6], [0, 6]], rimS: [[-3, -2], [4, -6], [14, -5.5], [22, -3.5]], nos: [24, -3], eye: [9, -3], top: -8 },
+    titan: { hipX: -34, hipH: 60, shX: 28, shH: 58, nA: -0.85, nCurl: 0.06, hA: 0.3, neck: 106, nUp: [15, 11.5, 9, 7.5], nDn: [16, 12, 9.5, 7.5], tail: 92, tn: 5, tAng: PI - 0.36, tCurl: 0.05, tUp: [1.2, 3, 6, 10.5, 17], tDn: [1.2, 3, 6, 10, 16], bU: [30, 33, 27], bD: [27, 34, 27], hL: [29, 28], fL: [28, 27], hW: 20, fW: 17.5, eat: [0.4, 0.04, 1.0], roarN: -0.35, atkN: -0.25, hs: 1.25, k: 0.86,
+      skull: [[-4, 4], [-4, -5], [3, -9.5], [12, -9.5], [22, -5.5], [28, -1], [29, 3], [26, 6], [12, 6.5], [0, 6]], rimS: [[-2, -4], [3, -8.5], [12, -8.5], [20, -5]], nos: [21, -5.5], eye: [10, -3.5], top: -10 },
+  };
   function sauropod(ctx, sp, o) {
     const X = poseOf(o, sp), S = X.S, P = X.P, st = X.st;
-    const brach = has(sp, 'high_neck');
+    const kind = has(sp, 'high_neck') ? 'brach' : has(sp, 'giant') ? 'titan' : 'diplo', C = SAURO[kind];
     const legK = S.leg, ph = X.t * 4.2, rc = X.rc;
-    const hipH = (brach ? 58 : 56) * legK, shH = (brach ? 74 : 50) * legK;
-    let bx = 0, by = 0, rear = 0, nA = brach ? -1.22 : -0.42, nCurl = brach ? 0.1 : 0.06, hA = brach ? 0.32 : 0.3, tailLift = 0;
+    const hipH = C.hipH * legK, shH = C.shH * legK;
+    let bx = 0, by = 0, rear = 0, nA = C.nA, nCurl = C.nCurl, hA = C.hA, tailLift = 0;
     switch (X.pose) {
       case 'walk': by = -Math.abs(Math.sin(ph)) * 1.4; nA += Math.sin(ph * 2) * 0.03; break;
-      case 'attack': rear = rearCurve(X.k); bx = slamFwd(X.k) * 9; nA += brach ? -0.12 * rear + 0.15 * slamFwd(X.k) : -0.4 * rear + 0.2 * slamFwd(X.k); tailLift = 0.12 * rear; hA -= 0.3 * rear; break;
-      case 'roar': nA += brach ? -0.22 : -0.45; nCurl -= 0.04; hA = -0.4 + Math.sin(X.t * 30) * 0.02; break;
-      case 'eat':
-        if (brach) { nA = -1.0; nCurl = 0.14; hA = 0.7 + Math.sin(X.t * 4) * 0.05; } else { nA = 0.32; nCurl = 0.05; hA = 1.05 + Math.sin(X.t * 4) * 0.05; }
-        break;
+      case 'attack': rear = rearCurve(X.k); bx = slamFwd(X.k) * 9; nA += C.atkN * rear + 0.18 * slamFwd(X.k); tailLift = 0.12 * rear; hA -= 0.3 * rear; break;
+      case 'roar': nA += C.roarN; nCurl -= 0.04; hA = -0.4 + Math.sin(X.t * 30) * 0.02; break;
+      case 'eat': nA = C.eat[0]; nCurl = C.eat[1]; hA = C.eat[2] + Math.sin(X.t * 4) * 0.05; break;
       case 'hurt': bx = -8 * rc; nA -= 0.3 * rc; hA -= 0.4 * rc; tailLift = 0.15 * rc; break;
       default: by = -X.br * 1.0; nA += X.look * 0.06 + Math.sin(X.t * 0.8) * 0.03; hA += X.look * 0.15;
     }
-    const hip = [(brach ? -36 : -32) + bx, -hipH + by], sh0 = [(brach ? 26 : 26) + bx, -shH + by];
+    const hip = [C.hipX + bx, -hipH + by], sh0 = [C.shX + bx, -shH + by];
     const ang = Math.atan2(sh0[1] - hip[1], sh0[0] - hip[0]) - rear * 0.5, bl = Math.hypot(sh0[0] - hip[0], sh0[1] - hip[1]);
     const B = frame(hip, ang);
     const walking = X.pose === 'walk';
-    const tn = brach ? 4 : 6;
-    const tail = tailJoints(X, B(-6, -2), (brach ? PI - 0.3 : PI - 0.32) + tailLift - ang * 0.4, (brach ? 58 : 92) * S.tail, tn, brach ? -0.02 : 0.075, walking ? 0.09 : 0.05, 1.3);
+    const tail = tailJoints(X, B(-6, -2), C.tAng + tailLift - ang * 0.4, C.tail * S.tail, C.tn, C.tCurl, walking ? 0.09 : 0.05, 1.3);
     // neck chain
-    const neck = [], nn = 4, nlen = (brach ? 92 : 78) * S.neck;
+    const neck = [], nn = 4, nlen = C.neck * S.neck;
     let a = nA - nCurl * 1.5, p = B(bl + 5, -6);
     for (let i = 0; i < nn; i++) {
       a += nCurl + Math.sin(X.t * 1.1 - i * 0.7) * 0.015;
       p = [p[0] + Math.cos(a) * nlen / nn, p[1] + Math.sin(a) * nlen / nn];
       neck.push(p);
     }
-    const ch = S.chub;
-    const tUp = brach ? [2, 6, 11, 17] : [1, 2.5, 4.5, 7.5, 11.5, 17], tDn = brach ? [2, 6, 11, 16] : [1, 2.5, 4.5, 7, 11, 16];
-    const nUp = brach ? [16, 12, 9.5, 8] : [14, 11, 9, 7.5], nDn = brach ? [17, 12.5, 10, 8] : [15, 11.5, 9, 7.5];
+    const ch = S.chub, bU = C.bU, bD = C.bD;
     const J = tail.concat([B(0, 0), B(bl * 0.5, -4), B(bl, 0)], neck);
-    const T = trunk(J, tUp.concat([24, 28 * ch, 24], nUp), tDn.concat([22, 29 * ch * (1 + X.br * 0.02), 24], nDn));
-    const iH = tn, iS = tn + 2, iN = T.n - 1;
+    const T = trunk(J, C.tUp.concat([bU[0], bU[1] * ch, bU[2]], C.nUp), C.tDn.concat([bD[0], bD[1] * ch * (1 + X.br * 0.02), bD[2]], C.nDn));
+    const iH = C.tn, iS = C.tn + 2, iN = T.n - 1;
     ctx.save();
+    // long-bodied kinds are drawn slightly smaller so the shared template bounds stay tight (species size compensates)
+    if (C.k) ctx.scale(C.k, C.k);
     const G = H.volume(ctx, P.body, T.box[1], 2);
     const stride = 10 * legK, lift = 6 * legK;
     const foot = (rx, p2, off) => (walking ? [rx + stride * Math.sin(p2), -Math.max(0, Math.cos(p2)) * lift] : [rx + off + bx * 0.5, 0]);
-    const frontFoot = (p2, off) => { const g = foot(brach ? 28 : 28, p2, off), top = B(bl, 10); return lerpPt(g, [top[0] + 8, top[1] + 34 * legK], smoothstep(rear * 1.5)); };
-    const hL1 = 27 * legK, hL2 = 25 * legK, fL1 = (brach ? 34 : 23) * legK, fL2 = (brach ? 32 : 22) * legK;
-    quadLeg(ctx, X, B(8, 12), foot(-30, ph + PI, -6), hL1, hL2, 17, 1, P.far, false);
-    quadLeg(ctx, X, B(bl + 3, 12), frontFoot(ph, -5), fL1, fL2, brach ? 15 : 13.5, -1, P.far, false);
+    const frontFoot = (p2, off) => { const g = foot(C.shX + 2, p2, off), top = B(bl, 10); return lerpPt(g, [top[0] + 8, top[1] + 34 * legK], smoothstep(rear * 1.5)); };
+    const hL1 = C.hL[0] * legK, hL2 = C.hL[1] * legK, fL1 = C.fL[0] * legK, fL2 = C.fL[1] * legK;
+    quadLeg(ctx, X, B(8, 12), foot(C.hipX + 6, ph + PI, -6), hL1, hL2, C.hW, 1, P.far, false);
+    quadLeg(ctx, X, B(bl + 3, 12), frontFoot(ph, -5), fL1, fL2, C.fW, -1, P.far, false);
     paintTrunk(ctx, X, sp, T, G, {
       pat: [T.joints[Math.max(0, iH - 2)][0], T.box[1], T.joints[iS][0] + 10, T.joints[iH + 1][1] + 6], patK: 1.3, rim: [1, iN],
-      hl: [B(bl * 0.45, 0)[0], B(bl * 0.45, -22)[1], 60], tex: 110,
+      hl: [B(bl * 0.45, 0)[0], B(bl * 0.45, -22)[1], 60], tex: 86,
       extra() {
         if (sp.pattern === 'spots') pattern(ctx, sp, X, neck[0][0] - 20, T.box[1], neck[nn - 1][0] + 10, neck[0][1] + 10, 0.8);
       },
     });
+    if (C === SAURO.diplo && st > 0) {
+      // keratin spine row along the back and tail
+      ctx.beginPath();
+      for (let u = 1.6; u < iN - 0.3; u += 0.42) {
+        const q = along(T, u, -0.96), h = (1.5 + 2.6 * S.feat) * (u > iS ? 0.7 : 1), ux = -q[2], uy = -q[3];
+        ctx.moveTo(q[0] + uy * 2, q[1] - ux * 2); ctx.lineTo(q[0] + ux * h - uy * 1.2, q[1] + uy * h + ux * 1.2); ctx.lineTo(q[0] - uy * 2, q[1] + ux * 2);
+      }
+      ctx.fillStyle = H.mix(P.dark, P.acc, 0.3); ctx.fill();
+      ctx.strokeStyle = P.ink; ctx.lineWidth = 0.9; ctx.stroke();
+    }
+    if (C === SAURO.titan && st > 0) {
+      // armoured back: rows of osteoderms
+      for (let row = 0; row < 2; row++) {
+        ctx.beginPath();
+        const cnt = row ? 7 : 10, r = (row ? 2.4 : 3.2) * (0.6 + 0.4 * S.feat);
+        for (let i = 0; i < cnt; i++) {
+          const q = along(T, lerp(iH - 1.6, iS + 0.4, i / (cnt - 1)), row ? -0.45 : -0.82);
+          ctx.moveTo(q[0] + r * 1.25, q[1]); ctx.ellipse(q[0], q[1], r * 1.25, r, 0, 0, TAU);
+        }
+        ctx.fillStyle = H.rgba(H.shade(P.body, 0.2), 0.95); ctx.fill();
+        ctx.strokeStyle = H.rgba(P.ink, 0.6); ctx.lineWidth = 1; ctx.stroke();
+      }
+    }
     if (st === 3) {
       const segs = [];
       for (let i = 0; i < 9; i++) { const q = along(T, lerp(iH - 0.5, iN - 0.5, i / 8), -0.55); segs.push([[q[0] - 1.2, q[1]], [q[0] + 1.2, q[1]]]); }
@@ -1367,10 +1501,11 @@
       const c = B(bl * 0.3, 4);
       clawScars(ctx, X, c[0], c[1], 1.1 + ang, 20, 1.3);
     }
-    quadLeg(ctx, X, B(3, 13), foot(-34, ph, 4), hL1, hL2, 18, 1, G, true);
-    quadLeg(ctx, X, B(bl - 3, 13), frontFoot(ph + PI, 3), fL1, fL2, brach ? 15.5 : 14, -1, G, true);
+    quadLeg(ctx, X, B(3, 13), foot(C.hipX + 2, ph, 4), hL1, hL2, C.hW + 1, 1, G, true);
+    quadLeg(ctx, X, B(bl - 3, 13), frontFoot(ph + PI, 3), fL1, fL2, C.fW + 0.5, -1, G, true);
     // small head
-    const ne = neck[nn - 1], hs = S.head * 1.05, jawA = X.jw * 0.35, lw = LW / hs;
+    const ne = neck[nn - 1], hs = S.head * C.hs, jawA = X.jw * 0.35, lw = LW / hs;
+    hA = clampHead(ne, hA - jawA * 0.2, [[31, 3], [27, 7 + jawA * 20], [14, 9 + jawA * 10]], hs) + jawA * 0.2;
     ctx.save();
     ctx.translate(ne[0], ne[1]); ctx.rotate(hA - jawA * 0.2); ctx.scale(hs, hs);
     ctx.save(); ctx.translate(2, 4); ctx.rotate(jawA); ctx.translate(-2, -4);
@@ -1378,69 +1513,67 @@
     H.smooth(ctx, [[2, 4], [26, 4], [27, 7], [14, 9], [2, 8]], true, 0.4); H.fillStroke(ctx, P.jaw, P.ink, lw);
     if (S.teeth > 0) H.teeth(ctx, 18, 4.2, 26, 4.2, 4, 1.4, true, P.tooth);
     ctx.restore();
-    const SK = brach
-      ? [[-4, 4], [-4, -4], [1, -9], [6, -14], [12, -14], [16, -9], [22, -5], [27, -1], [28, 3], [26, 5], [12, 6], [0, 6]]
-      : [[-4, 4], [-5, -3], [4, -7], [14, -6.5], [24, -4], [30, -1], [31, 3], [28, 5], [14, 6], [0, 6]];
-    paintShape(ctx, X, () => H.smooth(ctx, SK, true, 0.45), H.volume(ctx, P.body, brach ? -14 : -8, 6), () => {
+    paintShape(ctx, X, () => H.smooth(ctx, C.skull, true, 0.45), H.volume(ctx, P.body, C.top, 6), () => {
       H.ellipse(ctx, 12, 6, 13, 2.5); ctx.fillStyle = P.bellyA; ctx.fill();
       texture(ctx, P, sp.seed + 2, -4, -14, 30, 6, 12, 0.4, 1);
-      openPath(ctx, brach ? [[-2, -4], [3, -10], [8, -13], [13, -12]] : [[-3, -2], [4, -6], [14, -5.5], [22, -3.5]]);
-      ctx.strokeStyle = P.rim; ctx.lineWidth = 1.6; ctx.stroke();
+      openPath(ctx, C.rimS); ctx.strokeStyle = P.rim; ctx.lineWidth = 1.6; ctx.stroke();
     }, lw);
     if (S.teeth > 0) H.teeth(ctx, 19, 4.6, 27, 3.6, 4, 1.6, false, P.tooth);
-    H.ellipse(ctx, brach ? 9 : 24, brach ? -12 : -3, 1.6, 1, -0.3); ctx.fillStyle = 'rgba(25,12,6,.7)'; ctx.fill();
-    eye(ctx, X, brach ? 12 : 9, -3, 2 * S.eye, { iris: st === 3 ? P.glow : '#8a5a22', pupil: 'round', brow: st > 1 });
+    H.ellipse(ctx, C.nos[0], C.nos[1], 1.6, 1, -0.3); ctx.fillStyle = 'rgba(25,12,6,.7)'; ctx.fill();
+    eye(ctx, X, C.eye[0], C.eye[1], 2 * S.eye, { iris: st === 3 ? P.glow : '#8a5a22', pupil: 'round', brow: st > 1 });
     ctx.restore();
     ctx.restore();
   }
-  ART.registerTemplate('sauropod', sauropod, { bounds: [-150, -205, 136, 4], shadowW: 150 });
+  ART.registerTemplate('sauropod', sauropod, { bounds: [-145, -216, 162, 4], shadowW: 160 });
 
   // ===================================================================
   // PTEROSAUR (pteranodon): hovers above its ground point with flapping wings, long beak and back crest
   function pterosaur(ctx, sp, o) {
     const X = poseOf(o, sp), S = X.S, P = X.P, st = X.st, fk = S.feat;
     const lg = X.lg, rc = X.rc;
-    let speed = 5.5, hover = 60, bx = 0, ang = -0.05, hA = 0.12, flapAmp = 1, flapBias = 0, jawA = X.jw * 0.42;
+    let speed = 5.5, hover = 60, bx = 0, ang = -0.05, hA = 0.12, flapAmp = 1, flapBias = 0;
+    const jawA = X.jw * 0.42;
     switch (X.pose) {
       case 'walk': speed = 8.5; ang = 0.12; break;
       case 'attack': speed = 9; bx = lg * 16; hover = 60 - Math.max(0, lg) * 24; ang = 0.05 + 0.35 * Math.max(0, lg) - 0.2 * clamp(-lg / 0.3, 0, 1); hA = 0.15 + 0.2 * Math.max(0, lg); flapAmp = 1 - 0.8 * Math.abs(lg); flapBias = 0.85 * Math.abs(lg); break;
       case 'roar': speed = 3; flapAmp = 0.15; flapBias = 0.55; ang = -0.25; hA = -0.5 + Math.sin(X.t * 30) * 0.03; break;
-      case 'eat': speed = 4.5; hover = 34; ang = 0.32; hA = 1.0 + Math.sin(X.t * 5) * 0.06; flapAmp = 0.7; break;
+      case 'eat': speed = 4.5; hover = 34; ang = 0.3; hA = 0.55 + Math.sin(X.t * 5) * 0.06; flapAmp = 0.7; break;
       case 'hurt': speed = 3; bx = -8 * rc; ang = -0.4 * rc; hA = 0.12 - 0.5 * rc; flapAmp = 0.4; flapBias = -0.5 * rc; break;
       default: hA += X.look * 0.12;
     }
-    const f = clamp(Math.sin(X.t * speed) * flapAmp + flapBias, -1, 1);
+    // asymmetric flap: quick downstroke, slower upstroke
+    const ph = (X.t * speed / TAU) % 1, wave = ph < 0.4 ? Math.cos(ph / 0.4 * PI) : -Math.cos((ph - 0.4) / 0.6 * PI);
+    const f = clamp(wave * flapAmp + flapBias, -1, 1);
     const bob = -f * 3 * flapAmp;
     const c = [bx, -hover * (0.75 + 0.25 * S.leg) + bob];
     const B = frame(c, ang);
-    const span = 66 * [0.68, 0.84, 1, 1.08][st];
+    const span = 84 * [0.66, 0.84, 1, 1.08][st];
     ctx.save();
     // wing: shoulder S, sY = vertical extent (-1.2..1.2), near wing slightly lower (camera above)
     const wing = (sY, near) => {
-      const S0 = B(near ? 7 : 10, near ? -3 : -6), hipW = B(-14, near ? 2 : -2);
-      const d = near ? 1 : 0.86, sw = span * d;
-      const E = [S0[0] - 6 * d, S0[1] - 22 * d * sY], W = [S0[0] - 1 * d, S0[1] - 44 * d * sY], Tp = [S0[0] - 26 * d, S0[1] - sw * sY];
-      const tr1 = [S0[0] - 36 * d, S0[1] - sw * 0.62 * sY], tr2 = [S0[0] - 34 * d, S0[1] - sw * 0.3 * sY];
-      const pts = [S0, E, W, Tp, tr1, tr2, hipW];
-      const col = near ? H.mix(P.body, P.acc, 0.22) : H.shade(H.mix(P.body, P.acc, 0.22), -0.32);
-      const path = () => H.smooth(ctx, pts, true, 0.3);
-      paintShape(ctx, X, path, H.linear(ctx, S0[0], S0[1], Tp[0], Tp[1], [[0, H.shade(col, -0.12)], [0.5, col], [1, H.shade(col, 0.12)]]), () => {
-        ctx.strokeStyle = H.rgba(P.ink, 0.22); ctx.lineWidth = 1;
+      const S0 = B(near ? 7 : 10, near ? -3 : -6), hipW = B(-15, near ? 2 : -2);
+      const d = near ? 1 : 0.86, k = span * d / 66;
+      // arm (shoulder → elbow → wrist) then the long wing finger to the tip; narrow membrane behind it
+      const E = [S0[0] + 5 * k, S0[1] - 13 * k * sY], W = [S0[0] + 4 * k, S0[1] - 28 * k * sY];
+      const Fm = [S0[0] - 20 * k, S0[1] - 46 * k * sY], Tp = [S0[0] - 50 * k, S0[1] - 64 * k * sY];
+      const tr1 = [S0[0] - 40 * k, S0[1] - 42 * k * sY], tr2 = [S0[0] - 30 * k, S0[1] - 19 * k * sY];
+      const pts = [S0, E, W, Fm, Tp, lerpPt(Tp, tr1, 0.5), tr1, tr2, hipW];
+      const col = H.shade(H.mix(P.body, P.acc, 0.28), near ? 0.1 : -0.28);
+      paintShape(ctx, X, () => H.smooth(ctx, pts, true, 0.2), H.linear(ctx, S0[0], S0[1], Tp[0], Tp[1], [[0, H.rgba(H.shade(col, -0.22), 0.96)], [0.5, H.rgba(H.shade(col, 0.08), 0.86)], [1, H.rgba(H.shade(col, 0.3), 0.78)]]), () => {
+        // stiffening fibres from the finger to the trailing edge
+        ctx.strokeStyle = H.rgba(P.ink, 0.2); ctx.lineWidth = 0.8;
         ctx.beginPath();
-        for (let i = 1; i <= 3; i++) { const a = lerpPt(W, Tp, i / 4), b = lerpPt(tr2, tr1, i / 4); ctx.moveTo(a[0], a[1]); ctx.quadraticCurveTo((a[0] + b[0]) / 2 - 4, (a[1] + b[1]) / 2, b[0], b[1]); }
+        for (let i = 1; i <= 5; i++) { const u = i / 6, a2 = lerpPt(W, Tp, u), b2 = lerpPt(tr2, Tp, u * 0.9); ctx.moveTo(a2[0], a2[1]); ctx.lineTo(b2[0], b2[1]); }
         ctx.stroke();
-        H.ellipse(ctx, (S0[0] + tr2[0]) / 2, (S0[1] + tr2[1]) / 2, 10, 8); ctx.fillStyle = 'rgba(20,10,5,.12)'; ctx.fill();
-      });
-      // leading-edge arm bones
-      ctx.strokeStyle = near ? P.dark : H.shade(P.dark, -0.25); ctx.lineWidth = 3.4; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
-      ctx.beginPath(); ctx.moveTo(S0[0], S0[1]); ctx.lineTo(E[0], E[1]); ctx.lineTo(W[0], W[1]); ctx.lineTo(Tp[0], Tp[1]); ctx.stroke();
-      ctx.strokeStyle = H.rgba(P.light, 0.5); ctx.lineWidth = 1.1;
-      ctx.beginPath(); ctx.moveTo(E[0], E[1]); ctx.lineTo(W[0], W[1]); ctx.lineTo(lerpPt(W, Tp, 0.7)[0], lerpPt(W, Tp, 0.7)[1]); ctx.stroke();
+        H.ellipse(ctx, (S0[0] + tr2[0]) / 2, (S0[1] + tr2[1]) / 2, 9 * k, 7 * k); ctx.fillStyle = 'rgba(20,10,5,.14)'; ctx.fill();
+      }, LW * 0.8);
+      // arm and wing-finger bones along the leading edge
+      H.limb(ctx, [S0, E, W], [6, 4.4, 3.6], near ? P.body : P.far, P.ink, LW * 0.7);
+      H.limb(ctx, [W, Fm, Tp], [3.2, 2.4, 1.2], near ? P.dark : H.shade(P.dark, -0.25), P.ink, LW * 0.5);
       H.claws(ctx, W[0], W[1], 3, 3, sY > 0 ? -0.3 : 0.6, P.claw);
-      if (near && st === 3) glowLines(ctx, X, [[lerpPt(W, Tp, 0.15), lerpPt(W, Tp, 0.85)]], 1.2);
     };
-    const sN = clamp(f - 0.45, -1.2, 1.15), sF = clamp(f + 0.5, -1.0, 1.2);
-    wing(Math.abs(sF) < 0.12 ? 0.12 * Math.sign(sF || 1) : sF, false);
+    const sN = clamp(0.12 + f * 0.6, -0.6, 0.85), sF = clamp(0.5 + f * 0.5, -0.2, 1);
+    wing(Math.abs(sF) < 0.16 ? 0.16 * Math.sign(sF || 1) : sF, false);
     // legs trailing under the tail
     const legs = (near) => {
       const hp = B(-12, near ? 4 : 2), dx = near ? 0 : 3, sw = Math.sin(X.t * 2) * 1.5;
@@ -1452,29 +1585,40 @@
     const T = trunk([B(-30, 2), B(-16, 1), B(-2, 0), B(10, -1), B(18, -6), B(23, -12)], [1, 6, 9.5, 9, 5, 4], [1, 7, 10, 9, 5, 4]);
     paintTrunk(ctx, X, sp, T, H.volume(ctx, P.body, T.box[1], T.box[3]), { rim: [1, 5], hl: [B(0, 0)[0], B(0, -8)[1], 18], tex: 30 });
     legs(true);
-    // head: long toothless beak and backswept crest
+    // head: toothless beak; pteranodon = long beak + backswept crest, tapejara = short hooked beak + huge sail crest
+    const tape = has(sp, 'sail_crest');
     const ne = T.joints[5], hs = S.head * 0.95, lw = LW / hs, ck = [0.25, 0.6, 1, 1.25][st];
+    const bk = (tape ? 0.62 : 1) * (st === 0 ? 0.7 : 1), droop = tape ? 3 : 0;
+    hA = clampHead(ne, hA - jawA * 0.3, [[44 * bk, droop], [40 * bk, 4 + jawA * 40]], hs) + jawA * 0.3;
     ctx.save();
     ctx.translate(ne[0], ne[1]); ctx.rotate(hA - jawA * 0.3); ctx.scale(hs, hs);
-    const bk = st === 0 ? 0.7 : 1;
-    const crest = [[-2, -4], [-14 * ck - 4, -10 * ck - 4], [-30 * ck - 2, -17 * ck - 3], [-33 * ck - 2, -14 * ck - 3], [-10 * ck, -3], [-3, 1]];
-    paintShape(ctx, X, () => H.smooth(ctx, crest, true, 0.4), H.mix(P.acc, P.body, 0.15), () => {
+    const crest = tape
+      ? [[16 * bk, -5], [12 * bk, -16 * ck - 6], [2, -34 * ck - 6], [-12 * ck, -36 * ck - 4], [-20 * ck, -24 * ck - 4], [-28 * ck - 2, -12 * ck - 3], [-8 * ck, -3], [-3, 1]]
+      : [[-2, -4], [-14 * ck - 4, -10 * ck - 4], [-30 * ck - 2, -17 * ck - 3], [-33 * ck - 2, -14 * ck - 3], [-10 * ck, -3], [-3, 1]];
+    paintShape(ctx, X, () => H.smooth(ctx, crest, true, 0.4), tape ? H.linear(ctx, 0, -40 * ck, 0, 0, [[0, H.mix(P.acc, '#ffd84a', 0.55)], [0.45, P.acc], [1, H.shade(P.acc, -0.25)]]) : H.mix(P.acc, P.body, 0.15), () => {
+      if (tape) {
+        // bold bands across the sail
+        ctx.strokeStyle = H.rgba(H.shade(P.acc, -0.55), 0.55); ctx.lineWidth = 2.4;
+        ctx.beginPath();
+        for (let i = 1; i < 4; i++) { const y = -i * 9 * ck - 3; ctx.moveTo(-30 * ck, y + 6); ctx.quadraticCurveTo(-4, y - 4, 18 * bk, y + 2); }
+        ctx.stroke();
+      }
       openPath(ctx, crest.slice(0, 3).map(q => [q[0], q[1] + 1.6])); ctx.strokeStyle = 'rgba(255,240,220,.4)'; ctx.lineWidth = 1.6; ctx.stroke();
     }, lw);
-    if (st === 3) glowLines(ctx, X, [[crest[1], crest[2]].map(q => [q[0] + 2, q[1] + 2])], 1.1 / hs);
+    if (st === 3) glowLines(ctx, X, [(tape ? [crest[1], crest[2], crest[3]] : [crest[1], crest[2]]).map(q => lerpPt(q, [-4, -10], 0.22))], 1.1 / hs);
     ctx.save(); ctx.translate(3, 2.5); ctx.rotate(jawA); ctx.translate(-3, -2.5);
-    H.smooth(ctx, [[3, 2.5], [42 * bk, 1.5], [38 * bk, 4], [18 * bk, 5.5], [3, 5.5]], true, 0.35); H.fillStroke(ctx, H.mix(P.beak, P.belly, 0.35), P.ink, lw);
+    H.smooth(ctx, [[3, 2.5], [42 * bk, 1.5 + droop], [38 * bk, 4 + droop * 0.7], [18 * bk, 5.5], [3, 5.5]], true, 0.35); H.fillStroke(ctx, H.mix(P.beak, P.belly, 0.35), P.ink, lw);
     ctx.restore();
-    const SK = [[-6, 2], [-5, -4], [4, -6.5], [16 * bk, -4.5], [44 * bk, -0.6], [40 * bk, 1.6], [20 * bk, 2.6], [3, 3.5]];
+    const SK = [[-6, 2], [-5, -4], [4, -6.5], [16 * bk, -4.5], [44 * bk, -0.6 + droop], [40 * bk, 1.6 + droop], [20 * bk, 2.6], [3, 3.5]];
     paintShape(ctx, X, () => H.smooth(ctx, SK, true, 0.35), H.volume(ctx, P.body, -7, 4), () => {
-      H.poly(ctx, [[12 * bk, -8], [48 * bk, -2], [48 * bk, 5], [12 * bk, 5]], true); ctx.fillStyle = H.rgba(H.mix(P.beak, P.belly, 0.45), 0.85); ctx.fill();
+      H.poly(ctx, [[12 * bk, -8], [48 * bk, -2], [48 * bk, 8], [12 * bk, 8]], true); ctx.fillStyle = H.rgba(H.mix(P.beak, P.belly, 0.45), 0.85); ctx.fill();
       openPath(ctx, [[-4, -3], [4, -5.5], [16 * bk, -3.5], [30 * bk, -1.8]]); ctx.strokeStyle = P.rim; ctx.lineWidth = 1.5; ctx.stroke();
     }, lw);
     eye(ctx, X, 4, -1.6, 2.1 * S.eye, { iris: st === 3 ? P.glow : '#d0902a', pupil: st === 0 ? 'round' : 'slit', brow: st > 0 });
     ctx.restore();
     if (st === 3) clawScars(ctx, X, B(2, -3)[0], B(2, -3)[1], 1.2 + ang, 9, 0.9);
-    wing(Math.abs(sN) < 0.12 ? 0.12 * Math.sign(sN || 1) : sN, true);
+    wing(Math.abs(sN) < 0.16 ? 0.16 * Math.sign(sN || 1) : sN, true);
     ctx.restore();
   }
-  ART.registerTemplate('pterosaur', pterosaur, { bounds: [-56, -132, 74, 4], shadowW: 70 });
+  ART.registerTemplate('pterosaur', pterosaur, { bounds: [-78, -149, 88, 4], shadowW: 64 });
 })(window.PC = window.PC || {});

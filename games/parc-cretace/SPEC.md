@@ -29,8 +29,9 @@ Classic `<script src>` tags (no ES modules), loaded in this order by `index.html
 | 8 | js/iso.js | iso agent | PC.TERRAIN, PC.ISO |
 | 9 | js/engine.js | engine agent | PC.ENGINE |
 | 10 | js/battle.js | battle agent | PC.BATTLE |
-| 11 | js/ui.js | ui agent | PC.UI, PC.SFX, PC.LOGO |
-| 12 | js/main.js | ui agent | boot + wiring |
+| 11 | js/ui.js | ui agent | PC.UI, PC.LOGO, intro |
+| 12 | js/audio.js | audio agent | PC.SFX, PC.MUSIC |
+| 13 | js/main.js | ui agent | boot + wiring |
 | – | index.html | ui agent | page shell, CSS, DOM |
 
 Every JS file is wrapped as:
@@ -288,8 +289,8 @@ screenshots with the Read tool and iterate until the result is genuinely good.
 
 ## 11. Additional requirements from the player — PART OF THE BUILD, they override earlier sections
 
-Owners: intro + missions panel + music + research/expedition screens → ui agent (music in a new file
-`js/music.js`, loaded right after `js/ui.js`); battle moves, camera, story map, medals → battle agent;
+Owners: intro + missions panel + research/expedition screens → ui agent; sound effects and music →
+audio agent (`js/audio.js` provides both `PC.SFX` and `PC.MUSIC`, loaded after `js/ui.js`, before main.js); battle moves, camera, story map, medals → battle agent;
 side missions, medals, research steps, expeditions → engine agent; aquatic look → iso + buildings agents.
 If your module was already finished before this section existed, the integration step will handle it.
 
