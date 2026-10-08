@@ -307,3 +307,12 @@ screenshots with the Read tool and iterate until the result is genuinely good.
    build something, win a battle, research…). The Missions panel shows a vertical list of mission tabs on
    the left (icon per mission, "!" when claimable), and on the right the NPC portrait, title, short text,
    a checkbox goal line with progress, rewards (xp + coins/dollars) and a RÉCLAMER button.
+4. **Story map for tournaments, harder and harder** (reference screenshot: an overworld map): the
+   tournament screen becomes a scrollable painted map (grass, rivers, a central mountain, forests, roads,
+   clouds hiding the locked far part) with numbered round stage nodes linked by glowing paths. Next to each
+   node, a small stack of opponent portrait cards; under each node 3 medals — **Bronze, Argent, Or** — one
+   per difficulty tier of that stage (Bronze = base enemies; Argent = enemies +5 levels, 1 extra enemy if
+   fewer than 3; Or = +10 levels and max team). Medals light up when won; a stage's Argent unlocks after its
+   Bronze, Or after Argent; the next stage unlocks after Bronze. Rewards grow with the tier. Cleared nodes
+   are green, the current one pulses, locked ones are grey. Engine: `state.battles[park]` stays the highest
+   Bronze-cleared stage, plus `state.medals[park][stage] = 0..3`; `recordBattle(park, stage, won, tier)`.
