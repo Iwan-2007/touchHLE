@@ -316,3 +316,14 @@ screenshots with the Read tool and iterate until the result is genuinely good.
    Bronze, Or after Argent; the next stage unlocks after Bronze. Rewards grow with the tier. Cleared nodes
    are green, the current one pulses, locked ones are grey. Engine: `state.battles[park]` stays the highest
    Bronze-cleared stage, plus `state.medals[park][stage] = 0..3`; `recordBattle(park, stage, won, tier)`.
+
+## 12. Phase 3 — online battles (artifact runtime capabilities `db`, `room`, `user`)
+
+- **Arène en ligne (asynchrone, `db`)**: each player registers their best team (3 creatures: species,
+  level, stats snapshot) with trophies in a shared collection; a leaderboard lists other players; fighting
+  someone's team = a normal battle where the AI plays their side; wins/losses change trophies.
+- **Duel en direct (temps réel, `room`)**: lobby shows who is online (presence), challenge a player,
+  both join `room.join('duel-<id>')`; the challenger's page is authoritative (does every roll and
+  broadcasts the full battle state after each action), the other side only sends its move choice;
+  state is re-broadcast on request so dropped messages never desync.
+- Everything degrades gracefully when `claude.use(...)` resolves `null` (offline play stays complete).
