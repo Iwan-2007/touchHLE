@@ -1646,7 +1646,15 @@
       box(0.4, 0.42, 0.74, 0.76, 40, 48, '#e4e4de', {});
       const fp = P(0.52, 0.58, 48);
       cyl(fp[0], fp[1], 6, 16, '#c8402a', { top: '#1a1a1a', tex: (x, y, R, h) => { X.fillStyle = '#1a1a1a'; X.fillRect(x - R, y - h, R * 2, 4); X.fillStyle = '#f0f0ea'; X.fillRect(x - R, y - h + 7, R * 2, 2.5); } });
-      const mp = P(2.35, 0.59, 12); line(mp[0], mp[1], mp[0], mp[1] - 26, '#5a6268', 1.6); line(mp[0] - 5, mp[1] - 20, mp[0] + 5, mp[1] - 20, '#5a6268', 1.2);
+      // deck crane on the bow: orange post, slanted boom over the containers, hook with a net of fruit
+      const mp = P(2.3, 0.59, 12), mt = P(2.3, 0.59, 46), bt = P(1.86, 0.5, 58);
+      cyl(mp[0], mp[1], 3.4, 34, '#e0702a', { top: '#f09a4a' });
+      box(2.22, 0.51, 2.38, 0.67, 34, 42, '#f0f0ea', { lw: 0.8 });
+      line(mt[0], mt[1], bt[0], bt[1], ink('#e0702a'), 3.6); line(mt[0], mt[1], bt[0], bt[1], '#f08a3a', 2.2);
+      line(mt[0], mt[1] - 6, bt[0], bt[1], '#4a4a4a', 0.7);
+      line(bt[0], bt[1], bt[0], bt[1] + 12, '#3a3a3a', 0.8);
+      ell(bt[0], bt[1] + 16, 4.6, 4); fs(lin(bt[0] - 4, 0, bt[0] + 4, 0, [[0, '#6a8a3a'], [1, '#a8c860']]), '#3a4a1a', 0.8);
+      for (let k = 0; k < 3; k++) { ell(bt[0] - 2 + k * 2, bt[1] + 15 + (k % 2), 1.3, 1.3); X.fillStyle = ['#ff9a2a', '#e8402a', '#ffd23a'][k]; X.fill(); }
       // quay
       box(0.04, 1.18, 2.96, 2.96, 0, 4, '#b9b4a8', { texTop: TT.paving(3, '#b9b4a8') });
       ipath([[0.04, 1.22, 4], [2.96, 1.22, 4]], true); fs(null, '#f0c020', 1.6);
@@ -1669,9 +1677,21 @@
       container(0.25, 2.25, 0.95, 2.55, 4, '#2f6aa8');
       container(0.25, 2.55, 0.95, 2.85, 4, '#c8402a');
       container(0.3, 2.4, 1.0, 2.7, 19, '#e8b830');
-      // crane
-      const lattice = (len, z0, z1) => { X.strokeStyle = '#8a6a10'; X.lineWidth = 1; for (let z = z0; z < z1; z += 12) { X.beginPath(); X.moveTo(1, -z); X.lineTo(len - 1, -z - 12); X.moveTo(len - 1, -z); X.lineTo(1, -z - 12); X.stroke(); } };
-      box(2.52, 1.44, 2.78, 1.7, 4, 78, '#e8b830', { tex: lattice });
+      // quay crane: open lattice tower (4 legs + cross bracing) so the ship stays visible behind it
+      const CY = '#e8b830', CD = '#8a6a10', Lg = 0.03, cu0 = 2.52, cu1 = 2.78, cv0 = 1.44, cv1 = 1.7;
+      const brace = (len, col, lw) => {
+        X.strokeStyle = col; X.lineWidth = lw; X.lineCap = 'round'; X.beginPath();
+        for (let z = 8; z < 78; z += 14) { X.moveTo(0, -z); X.lineTo(len, -z - 14); X.moveTo(len, -z); X.lineTo(0, -z - 14); X.moveTo(0, -z); X.lineTo(len, -z); }
+        X.stroke();
+      };
+      const leg = (u, v) => box(u - Lg, v - Lg, u + Lg, v + Lg, 4, 78, CY, { lw: 0.8 });
+      leg(cu0, cv0);
+      onL(cv0, cu0, () => brace((cu1 - cu0) * HX, shade(CD, 0.15), 1));   // far faces, seen through the tower
+      onR(cu0, cv1, () => brace((cv1 - cv0) * HX, shade(CD, 0.15), 1));
+      leg(cu1, cv0); leg(cu0, cv1);
+      onL(cv1, cu0, () => brace((cu1 - cu0) * HX, CD, 1.5));            // near faces
+      onR(cu1, cv1, () => brace((cv1 - cv0) * HX, CD, 1.5));
+      leg(cu1, cv1);
       box(2.47, 1.39, 2.83, 1.75, 78, 94, '#f0c030', {});
       onL(1.75, 2.47, () => { X.fillStyle = '#2a4a6a'; X.fillRect(3, -91, 12, 8); });
       onR(2.83, 1.75, () => { X.fillStyle = '#2a4a6a'; X.fillRect(3, -91, 10, 8); });
@@ -2483,6 +2503,14 @@
     draw(b) {
       seabed(2, 2, 0.05, 8);
       const c1 = P(1.38, 0.6, 3), c2 = P(0.6, 1.36, 3);
+      // wooden pontoon from the feeder, between the two cages, to the front platform
+      const wood = '#9a7048';
+      ipath([[0.42, 0.56, 3], [0.56, 0.42, 3], [1.58, 1.44, 3], [1.44, 1.58, 3]]); fs(shade(wood, -0.35));
+      ipath([[0.42, 0.56, 6], [0.56, 0.42, 6], [1.58, 1.44, 6], [1.44, 1.58, 6]]); fs(wood, ink(wood), 0.8);
+      X.beginPath();
+      for (let k = 0.5; k < 1.52; k += 0.075) { const a = P(k - 0.07, k + 0.07, 6), c = P(k + 0.07, k - 0.07, 6); X.moveTo(a[0], a[1]); X.lineTo(c[0], c[1]); }
+      X.strokeStyle = rgba(ink(wood), 0.5); X.lineWidth = 0.7; X.stroke();
+      for (const k of [0.75, 1.05, 1.35]) for (const [du, dv] of [[-0.08, 0.08], [0.08, -0.08]]) { const q = P(k + du, k + dv, 3); X.fillStyle = '#5a3a20'; X.fillRect(q[0] - 1, q[1] - 2, 2, 5); }
       // feeder unit
       box(0.18, 0.18, 0.5, 0.5, 3, 24, '#e8ecea', { tex: TX.panels(8) });
       onL(0.5, 0.18, () => { X.fillStyle = '#f0c020'; X.fillRect(0, -16, 0.32 * HX, 3); porthole(7.7, -10, 3, true); });
@@ -2490,10 +2518,15 @@
       line(f1[0], f1[1], c1[0] - 14, c1[1] - 38, '#4a5a64', 3); line(f1[0], f1[1], c2[0] + 8, c2[1] - 34, '#4a5a64', 3);
       netCage(c1[0], c1[1], 32, 34, 0, 1, false); netCage(c1[0], c1[1], 32, 34, 0, 1, true);
       netCage(c2[0], c2[1], 30, 30, 0, 2, false); netCage(c2[0], c2[1], 30, 30, 0, 2, true);
-      const sg = P(1.62, 1.7, 3);
-      for (const dx of [-12, 12]) { X.fillStyle = '#4a5a64'; X.fillRect(sg[0] + dx - 1, sg[1] - 20, 2, 20); }
-      board(sg[0], sg[1] - 24, 46, 12, 'POISSONS', 'navy', 8.5);
-      coralClump(...P(1.82, 1.1, 3), 10, 4);
+      // front platform: fish-food barrels, net basket and the sign
+      box(1.4, 1.4, 1.9, 1.9, 3, 7, wood, { tex: TX.planks(4, 5), texTop: () => { X.strokeStyle = rgba(ink(wood), 0.45); X.lineWidth = 0.02; for (let v = 1.48; v < 1.9; v += 0.08) { X.beginPath(); X.moveTo(1.42, v); X.lineTo(1.88, v); X.stroke(); } } });
+      barrel(...P(1.52, 1.5, 7), 5, 11, '#2f7aa8'); barrel(...P(1.66, 1.48, 7), 5, 11, '#e8b830');
+      const bk = P(1.56, 1.72, 7); ell(bk[0], bk[1] - 4, 7, 4.5); fs(lin(bk[0] - 7, 0, bk[0] + 7, 0, [[0, '#8a6a3a'], [1, '#d0b070']]), '#4a3418', 0.8);
+      for (let k = 0; k < 3; k++) miniFish(bk[0] - 3 + k * 3, bk[1] - 7 - (k % 2), 2.6, k % 2 ? 1 : -1, ['#ffb03a', '#4fc0e8', '#ff6a5a'][k], k);
+      const sg = P(1.86, 1.86, 7);
+      for (const dx of [-13, 13]) { X.fillStyle = '#4a5a64'; X.fillRect(sg[0] + dx - 1, sg[1] - 14, 2, 14); }
+      board(sg[0], sg[1] - 18, 48, 12, 'POISSONS', 'navy', 8.5);
+      coralClump(...P(1.84, 1.0, 3), 10, 4); coralClump(...P(0.25, 1.85, 3), 8, 7);
     },
     anim(b) {
       const t = b.t, n = 2 + Math.round(5 * b.g);
@@ -2502,7 +2535,7 @@
         X.save(); X.beginPath(); X.rect(c[0] - R, c[1] - h, R * 2, h + R * 0.5); X.clip();
         fishLoop(c[0], c[1] - h * 0.45, R * 0.75, R * 0.28, t, n, null, 0.9, u * 10);
         X.restore();
-        netCage(c[0], c[1], R, h, 0, 1, true);
+        cachedLayer('fishnet' + u, [c[0] - R - 6, c[1] - h - 8, c[0] + R + 6, c[1] + R * 0.5 + 4], () => netCage(c[0], c[1], R, h, 0, 1, true));
       }
       const f = P(1.38, 0.6, 38); bubbles(f[0] - 14, f[1] - 2, t, { n: 4, h: 30, spread: 6, seed: 3 });
     },
@@ -2745,6 +2778,14 @@
         ell(x, y - 11, 1.5, 2); fs('#ffe080');
       }
       if (!drawnBar) bar();
+      // greenhouse planters along the glass (kelp-green ferns in round pots)
+      for (const a of [0.15, 1.2, 2.0, 2.95, 4.0, 5.3]) {
+        const px = c[0] + Math.cos(a) * 84, py = fy + Math.sin(a) * 38;
+        ell(px, py - 3, 7, 3.5); fs('#b86a3a', '#5a2a10', 0.8);
+        fern(px, py - 4, 13, a > 3 && a < 6 ? '#3f9a4a' : '#5ab85a', Math.round(a * 10), 6);
+      }
+      // back half of the green light ring (seen through the glass)
+      for (let i = 0; i < 14; i++) { const a = PI + (i + 0.5) / 14 * PI; ell(c[0] + Math.cos(a) * (R + 2), fy + Math.sin(a) * (R + 2) / 2 + 1, 2.2, 1.5); X.fillStyle = '#5aff8a'; X.fill(); }
       // glass dome
       domePath(c[0], fy, R, 82);
       fs(rad(c[0] + 30, fy - 60, 6, 120, [[0, 'rgba(230,255,255,.5)'], [0.5, 'rgba(120,220,240,.22)'], [1, 'rgba(40,140,180,.42)']]), '#2a6a7a', 1.8);
@@ -2753,6 +2794,8 @@
       X.beginPath(); X.ellipse(c[0] + 40, fy - 56, 12, 30, 0.6, 0, TAU); X.fillStyle = 'rgba(255,255,255,.3)'; X.fill();
       X.restore();
       ell(c[0], fy - 82, 8, 4); fs('#c8d0d4', '#3a4a54', 1);
+      // front half of the green light ring on the base rim
+      for (let i = 0; i < 14; i++) { const a = (i + 0.5) / 14 * PI, x = c[0] + Math.cos(a) * (R + 2), y = fy + Math.sin(a) * (R + 2) / 2 + 1; ell(x, y, 3, 2); fs('#5aff8a', '#1a5a2a', 0.7); ell(x - 0.8, y - 0.6, 0.9, 0.6); X.fillStyle = '#eafff0'; X.fill(); }
       // airlock tube towards the front-left
       for (let i = 0; i <= 10; i++) {
         const v = lerp(2.05, 2.75, i / 10);
@@ -2765,6 +2808,17 @@
     anim(b) {
       const c = P(1.45, 1.4, 3), t = b.t;
       glow(c[0], c[1] - 40, 70, '#ffd890', 0.1 + 0.03 * Math.sin(t * 2.5));
+      // pulsing green rim lights (one cached glow sprite)
+      const gs = greenGlowSprite(), fy = c[1] - 12, ga = X.globalAlpha;
+      if (gs) {
+        X.save(); X.globalCompositeOperation = 'lighter';
+        for (let i = 0; i < 14; i++) {
+          const a = (i + 0.5) / 14 * PI, x = c[0] + Math.cos(a) * 100, y = fy + Math.sin(a) * 50 + 1;
+          X.globalAlpha = ga * (0.45 + 0.35 * Math.sin(t * 3 - i * 0.7));
+          X.drawImage(gs, x - 10, y - 10, 20, 20);
+        }
+        X.restore();
+      }
       fishLoop(c[0], c[1] - 60, 110, 30, t, 5, null, 0.35, 3);
       bubbles(c[0], c[1] - 100, t, { n: 4, h: 40, spread: 10, seed: 9 });
     },
@@ -3219,12 +3273,17 @@
         X.beginPath(); X.moveTo(tx - 26, 0); X.lineTo(tx - 26, -30); X.arc(tx, -30, 26, PI, 0); X.lineTo(tx + 26, 0); X.closePath(); fs('#c8ccd0', '#4a5058', 1.4);
         X.beginPath(); X.moveTo(tx - 20, 0); X.lineTo(tx - 20, -30); X.arc(tx, -30, 20, PI, 0); X.lineTo(tx + 20, 0); X.closePath(); fs(rad(tx, -10, 2, 40, [[0, '#0a0e12'], [1, '#2a3038']]));
         for (let i = 0; i < 5; i++) { ell(tx - 12 + i * 6, -40, 1.2, 1.2); X.fillStyle = '#ffe680'; X.fill(); }
-        board(tx, -66, 46, 10, 'TUNNEL', 'hazard', 7);
       });
       // rocky crest with snow
       snowTop(0.04, 0.92, 1.3, 2.96, 74, 5, 6);
       for (const [u, v, r] of [[0.3, 1.2, 18], [0.95, 1.15, 14], [0.4, 2.0, 20], [1.0, 2.3, 13], [0.55, 2.7, 16]]) { const p = P(u, v, 74); rock(p[0], p[1], r, r * 0.8, '#7a8088', u * 10 + v); snowPile(p[0] - 2, p[1] - r * 0.55, r * 0.8); }
       icicles(P(1.3, 2.96, 74), P(1.3, 0.92, 74), 12, 12, 3);
+      // tunnel sign on brackets, in front of the icicles
+      onR(1.3, 2.96, () => {
+        const tx = 0.8 * HX;
+        for (const dx of [-16, 16]) { X.fillStyle = '#3a4048'; X.fillRect(tx + dx - 1, -64, 2, 9); }
+        board(tx, -64, 50, 11, 'TUNNEL', 'hazard', 7.5);
+      });
       // hangars
       quonset(1.55, 2.6, 1.05, 1.8, '#c8402a', '#e4e0da', 1);
       onR(2.6, 1.8, () => { X.fillStyle = '#5a6268'; X.fillRect(8, -26, 20, 23); for (let z = 5; z < 26; z += 3) line(8, -z, 28, -z, 'rgba(0,0,0,.25)', 0.8); });
@@ -4379,6 +4438,12 @@
     if (spr) ctx.drawImage(spr.c, spr.x0, spr.y0, spr.w, spr.h);
     else d.draw(b);
   }
+  /** Draw a static sub-layer (e.g. a net drawn over animated fish) from the sprite cache at the current scale. */
+  function cachedLayer(key, bb, render) {
+    if (!BA.cache || typeof document === 'undefined') { render(); return; }
+    const spr = sprite('lyr:' + key, bucket(devScale(X)), bb, render);
+    if (spr) X.drawImage(spr.c, spr.x0, spr.y0, spr.w, spr.h); else render();
+  }
   function readyFx(b, d) {
     const t = b.t, pulse = 0.5 + 0.5 * Math.sin(t * 4);
     const r = (d.W + d.D) * HX * 0.42;
@@ -4417,6 +4482,12 @@
   const bulbSprite = () => fxSprite('bulb', 32, 32, g => {
     const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
     gr.addColorStop(0, 'rgba(255,244,190,.95)'); gr.addColorStop(0.3, 'rgba(255,214,110,.45)'); gr.addColorStop(1, 'rgba(255,200,80,0)');
+    g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
+  });
+  /** Soft green glow (sea greenhouse lights). */
+  const greenGlowSprite = () => fxSprite('gglow', 32, 32, g => {
+    const gr = g.createRadialGradient(16, 16, 0, 16, 16, 16);
+    gr.addColorStop(0, 'rgba(190,255,200,.95)'); gr.addColorStop(0.35, 'rgba(80,255,140,.45)'); gr.addColorStop(1, 'rgba(60,255,120,0)');
     g.fillStyle = gr; g.fillRect(0, 0, 32, 32);
   });
   /** Golden ring halo (unit sprite, stretched onto the ground ellipse). */
