@@ -1342,8 +1342,19 @@
     { id: 'road', label: 'Routes', icon: 'roads', title: 'Routes' },
   ];
   let marketTab = 'creatures';
-  UI.openMarket = function (tab) {
+  /** Card to highlight in the open market ({tab, id}); set by openMarket, cleared on tab switch. */
+  let marketFocus = null;
+  /**
+   * Open the market. `tab` is a tab id ('creatures', 'coins' | 'buildings', 'food', 'deco', 'road');
+   * `focusId` (optional) is a species or building id: the market opens on its tab, scrolls its card
+   * into view and highlights it.
+   */
+  UI.openMarket = function (tab, focusId) {
+    marketFocus = null;
+    if (focusId && spdef(focusId)) { tab = 'creatures'; marketFocus = { tab, id: focusId }; }
+    else if (focusId && bdef(focusId) && MARKET_TABS.some(t => t.id === bdef(focusId).kind)) { tab = bdef(focusId).kind; marketFocus = { tab, id: focusId }; }
     if (tab) marketTab = tab === 'buildings' ? 'coins' : tab;
+    if (!MARKET_TABS.some(t => t.id === marketTab)) marketTab = 'creatures';
     const P = openPanel('market', 'MARCHÉ');
     const tabsEl = h('div.vtabs');
     const inner = h('div.inner');
@@ -1358,7 +1369,7 @@
         const ic = t.id === 'food' ? resIcon(park().food || 'food_land') : t.icon;
         const offerBang = t.id === 'creatures' && hasFreshOffer();
         tabsEl.append(h('button.vtab' + (t.id === marketTab ? '.on' : ''), {
-          onclick: () => { if (marketTab !== t.id) { sfx('click'); marketTab = t.id; render(true); const sx = inner.querySelector('.scroll-x'); if (sx) sx.scrollLeft = 0; } },
+          onclick: () => { if (marketTab !== t.id) { sfx('click'); marketTab = t.id; marketFocus = null; render(true); const sx = inner.querySelector('.scroll-x'); if (sx) sx.scrollLeft = 0; } },
         }, icon(ic, 38), h('span', t.label), offerBang ? h('span.bang', '!') : null));
       }
       keepScroll(inner, () => { inner.innerHTML = ''; buildMarketTab(inner, marketTab); });
@@ -1366,7 +1377,43 @@
     P.onUpdate = () => render(false);
     P.onTimer = () => render(false);
     render(true);
+    // Bring the focused card into view (centred) once, on open.
+    const fc = marketFocus && inner.querySelector('.card.focus');
+    const row = fc && fc.parentNode;
+    if (row && row.scrollWidth > row.clientWidth) row.scrollLeft = Math.max(0, fc.offsetLeft - (row.clientWidth - fc.offsetWidth) / 2);
   };
+  /** Market tab + card a story goal points at (null when the market does not help with it). */
+  function marketTargetFor(g) {
+    if (!g) return null;
+    const pk = g.park || null;
+    if (g.type === 'build' || g.type === 'own_building') {
+      const b = g.building && bdef(g.building);
+      if (b) return !b.fixed && MARKET_TABS.some(t => t.id === b.kind) ? { park: b.park, tab: b.kind, id: b.id } : null;
+      if (g.kind && MARKET_TABS.some(t => t.id === g.kind)) return { park: pk, tab: g.kind, id: null };
+      return null;
+    }
+    if (g.type === 'hatch' || g.type === 'own_species') {
+      if (g.species && spdef(g.species)) return { park: spdef(g.species).park, tab: 'creatures', id: g.species };
+      const p2 = pk || cur();
+      // First species of that park the player can create right now.
+      const id = ((PC.SPECIES_ORDER || {})[p2] || []).find(x => spdef(x) && (ecall('speciesStatus', x) || {}).state === 'available');
+      return { park: p2, tab: 'creatures', id: id || null };
+    }
+    return null;
+  }
+  /** Open the market on what a story goal asks for (switching park first when needed). */
+  function openMarketForGoal(g) {
+    const t = marketTargetFor(g);
+    if (!t) return false;
+    cancelPlacement();
+    const go = () => UI.openMarket(t.tab, t.id);
+    if (t.park && t.park !== cur()) {
+      const st = ecall('parkStatus', t.park);
+      if (st && !st.unlocked) return false;
+      goToPark(t.park, go);
+    } else go();
+    return true;
+  }
   function hasFreshOffer() {
     const o = ecall('offerInfo');
     return !!(o && !o.owned && spdef(o.speciesId) && spdef(o.speciesId).park === cur());
@@ -1395,19 +1442,23 @@
     inner.append(h('div.sec-head', h('span.plate', icon(ic, 28), t.title.toUpperCase() + ' · ' + park().name), h('span.hint', hints[tab] || '')));
     const row = wheelX(h('div.cards-row.scroll-x', { 'data-sk': 'm-' + tab }));
     inner.append(row);
+    const focusId = marketFocus && marketFocus.tab === tab ? marketFocus.id : null;
+    const add = (card, id) => {
+      card.dataset.id = id;
+      if (id === focusId) card.classList.add('focus');
+      row.append(card);
+    };
     if (tab === 'creatures') {
       const off = ecall('offerInfo');
-      if (off && spdef(off.speciesId)) row.append(creatureCard(off.speciesId, off));
-      for (const id of (PC.SPECIES_ORDER || {})[cur()] || []) {
-        const sp = spdef(id);
-        if (!sp || (off && off.speciesId === id)) continue;
-        if (sp.offerOnly) continue;
-        row.append(creatureCard(id, null));
-      }
+      if (off && spdef(off.speciesId)) add(creatureCard(off.speciesId, off), off.speciesId);
+      // Species still to create come first; « Déjà créé » ones go to the end of the row.
+      const ids = ((PC.SPECIES_ORDER || {})[cur()] || []).filter(id => spdef(id) && !spdef(id).offerOnly && !(off && off.speciesId === id));
+      const owned = id => (ecall('speciesStatus', id) || {}).state === 'owned';
+      for (const id of ids.filter(id => !owned(id)).concat(ids.filter(owned))) add(creatureCard(id, null), id);
     } else {
       const list = Object.values(D().BUILDINGS || {}).filter(b => b.park === cur() && b.kind === tab && !b.fixed && b.kind !== 'special')
         .sort((a, b) => a.level - b.level || ((a.cost || {}).coins || 0) - ((b.cost || {}).coins || 0));
-      for (const b of list) row.append(buildingCard(b));
+      for (const b of list) add(buildingCard(b), b.id);
       if (!list.length) row.append(h('div.muted', { style: { padding: '20px' } }, 'Rien à vendre ici pour le moment.'));
     }
   }
@@ -1707,8 +1758,9 @@
   }
   function goMarketFor(speciesId) {
     const sp = spdef(speciesId);
-    if (sp && sp.park !== cur()) goToPark(sp.park, () => UI.openMarket('creatures'));
-    else UI.openMarket('creatures');
+    const go = () => UI.openMarket('creatures', sp ? speciesId : null);
+    if (sp && sp.park !== cur()) goToPark(sp.park, go);
+    else go();
   }
 
   // ----- research visuals -----
@@ -2740,7 +2792,12 @@
       if (!last) acts.append(h('button.b', { onclick: e => { e.stopPropagation(); next(); } }, 'Suivant ➜'));
       else if (mode === 'outro') {
         acts.append(h('button.b.b-lg.title-play', { onclick: e => { e.stopPropagation(); close(); claimStory(); } }, icon('check', 24), 'RÉCLAMER', chips(def.reward, '+', 20)));
-      } else acts.append(h('button.b.b-lg', { onclick: e => { e.stopPropagation(); sfx('click'); close(); } }, 'C’est parti !'));
+      } else {
+        // Build / hatch goals: « C’est parti ! » opens the market right on what the mission asks for.
+        const g = def.goal, m = ecall('mission');
+        const toMarket = marketTargetFor(g) && !(m && m.def && m.def.id === def.id && m.done);
+        acts.append(h('button.b.b-lg', { onclick: e => { e.stopPropagation(); sfx('click'); close(); if (toMarket) openMarketForGoal(g); } }, 'C’est parti !'));
+      }
     };
     const show = () => {
       tw = typewriter(txt, lines[i], 50, null);

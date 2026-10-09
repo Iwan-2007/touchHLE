@@ -34,7 +34,7 @@
     return e;
   }
   const Hh = () => PC.ART.helpers;
-  const sfx = n => { try { if (PC.SFX && PC.SFX.play) PC.SFX.play(n); } catch (e) { /* audio is optional */ } };
+  const sfx = (n, o) => { try { if (PC.SFX && PC.SFX.play) PC.SFX.play(n, o); } catch (e) { /* audio is optional */ } };
   // music goes through PC.UI.music when present (keeps the UI's current track + settings in sync)
   const music = t => {
     try {
@@ -195,6 +195,8 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
 .bt-btn-steel:active:not(:disabled){transform:translateY(2px)}
 .bt-btn-red{font-family:${FD};color:#fff;text-shadow:0 2px 0 #5a0c0c;border-radius:10px;border:3px solid #4a0a0a;
   background:linear-gradient(#ff8a6a,#e0402a 50%,#a01c12);box-shadow:inset 0 2px 0 rgba(255,255,255,.5),0 4px 0 #4a0a0a}
+.bt-btn-red:active:not(:disabled){transform:translateY(2px)}
+.bt-btn-red:disabled,.bt-round:disabled,.bt-auto:disabled{filter:grayscale(1) brightness(.75);opacity:.6}
 /* ---------- tournament screen ---------- */
 .bt-head{flex:none;position:relative;display:flex;align-items:center;gap:10px;padding:8px 12px 14px;z-index:3}
 .bt-head::after{content:"";position:absolute;left:0;right:0;bottom:0;height:7px;background:repeating-linear-gradient(-45deg,#f5c518 0 10px,#1b1b1b 10px 20px);border-top:1px solid #222}
@@ -235,7 +237,14 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
 .bt-stack{position:absolute;width:64px;height:52px;margin-top:-26px;pointer-events:none;z-index:1}
 .bt-stack canvas{position:absolute;top:0;width:34px;height:42px;border-radius:5px;border:2px solid #222;box-shadow:0 3px 5px rgba(0,0,0,.5)}
 .bt-stack.lock canvas{filter:grayscale(1) brightness(.55)}
-.bt-side{flex:none;width:410px;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px;scrollbar-width:thin}
+.bt-side{flex:none;width:410px;position:relative;display:flex;flex-direction:column;min-height:0}
+.bt-side-in{flex:1;min-height:0;overflow-y:auto;overflow-x:hidden;padding:12px;display:flex;flex-direction:column;gap:10px;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
+.bt-side-foot{flex:none;position:relative;display:flex;flex-direction:column;gap:5px;padding:10px 12px 12px;
+  background:linear-gradient(180deg,#20282d,#151a1e);border-top:2px solid #0a0d0f;box-shadow:0 -6px 14px rgba(0,0,0,.4)}
+.bt-toast{position:absolute;left:12px;right:12px;bottom:calc(100% + 8px);z-index:5;padding:8px 12px;border-radius:12px;pointer-events:none;
+  background:rgba(10,14,16,.95);border:2px solid #f5c518;color:#ffd23a;font-weight:800;font-size:14px;text-align:center;
+  box-shadow:0 4px 14px rgba(0,0,0,.6);text-wrap:balance;animation:bt-toast .22s ease-out}
+@keyframes bt-toast{from{transform:translateY(8px);opacity:0}to{transform:none;opacity:1}}
 .bt-opp{display:flex;gap:12px;align-items:center;padding:10px;border-radius:12px}
 .bt-opp canvas{flex:none;width:78px;height:94px;border-radius:8px;border:3px solid #2a3238;box-shadow:0 3px 6px rgba(0,0,0,.5)}
 .bt-opp-name{font-family:${FD};font-size:19px;color:#ffd96a;text-shadow:0 2px 0 rgba(0,0,0,.6)}
@@ -275,15 +284,39 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
 .bt-empty img{width:40px;height:40px;flex:none}
 .bt-go{font-size:28px;padding:12px 10px 10px;width:100%}
 .bt-hint{font-size:12px;color:#aeb9c0;text-align:center}
+.bt-side>.bt-hint{padding:12px}
 @media (max-width:760px){
-  .bt-body{flex-direction:column}
-  .bt-mapwrap{flex:0 0 41%}
-  .bt-side{width:auto;flex:1;padding:8px;gap:8px;border-top:3px solid #0a0d0f}
+  .bt-side-in{padding:8px;gap:8px}
+  .bt-side-foot{padding:8px 8px 10px}
+  .bt-toast{left:8px;right:8px}
   .bt-title{font-size:20px}
   .bt-tab{padding:6px 7px;font-size:11px}
   .bt-head-ico{display:none}
   .bt-opp canvas{width:62px;height:74px}
   .bt-go{font-size:24px;padding:10px}
+}
+/* phones held upright: map on top, stage panel below; landscape phones keep map | panel side by side */
+@media (max-width:760px) and (orientation:portrait){
+  .bt-body{flex-direction:column}
+  .bt-mapwrap{flex:0 0 41%}
+  .bt-side{width:auto;flex:1;border-top:3px solid #0a0d0f}
+}
+@media (max-width:760px) and (orientation:landscape){ .bt-side{width:min(410px,54%)} }
+@media (max-height:500px) and (orientation:landscape){
+  .bt-head{padding:5px 10px 11px}
+  .bt-head-ico{display:none}
+  .bt-title{font-size:19px}
+  .bt-opp{padding:6px}
+  .bt-opp canvas{width:52px;height:62px}
+  .bt-go{font-size:21px;padding:8px 10px 7px}
+  .bt-side-foot .bt-hint{display:none}
+}
+@media (max-width:480px){
+  .bt-head{gap:7px;padding:8px 8px 14px}
+  .bt-tabs{gap:4px}
+  .bt-tab{padding:6px 6px}
+  .bt-sub-park{display:none}
+  .bt-sub{white-space:normal;font-size:12px;line-height:1.15}
 }
 /* ---------- fight screen ---------- */
 .bt-fight canvas.bt-cv{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
@@ -380,7 +413,7 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
 @keyframes bt-pop{from{transform:scale(.2) rotate(-30deg);opacity:0}to{transform:none;opacity:1}}
 .bt-toggles{display:flex;gap:10px;justify-content:center;margin:10px 0}
 .bt-toggles button{padding:8px 12px;font-size:14px;border-radius:10px}
-@media (max-width:640px){
+@media (max-width:640px),(max-height:500px){
   .bt-plate{padding:5px 7px 6px}
   .bt-nm b{font-size:13.5px}
   .bt-who{font-size:11px}
@@ -401,6 +434,23 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
   .bt-sbtn{width:40px;height:40px}
   .bt-msg{bottom:150px;font-size:13px}
 }
+/* short landscape phones: pause/level and sound/music/AUTO/FUIR sit in the bottom bar corners, small team columns */
+@media (max-height:500px) and (orientation:landscape){
+  .bt-who canvas{width:20px;height:23px}
+  .bt-who img{width:16px;height:16px}
+  .bt-team{top:106px;gap:3px}
+  .bt-tp{width:34px;height:38px}
+  .bt-tp canvas{height:31px}
+  .bt-tp .m{height:5px}
+  .bt-tp.ko::after{font-size:11px}
+  .bt-left-ctl{bottom:10px}
+  .bt-side-ctl{bottom:8px;display:grid;grid-template-rows:auto auto;grid-auto-flow:column;gap:5px 6px;align-items:end}
+  .bt-sbtn{width:36px;height:36px}
+  .bt-sbtn img{width:22px;height:22px}
+  .bt-auto,.bt-flee{width:54px}
+  .bt-auto{height:32px}
+  .bt-msg{bottom:96px}
+}
 .bt-cv{transition:filter 1.4s ease}
 .bt-fight .bt-top,.bt-fight .bt-team,.bt-fight .bt-bottom,.bt-fight .bt-side-ctl{transition:opacity .35s ease}
 .bt-fight.intro .bt-top,.bt-fight.intro .bt-team,.bt-fight.intro .bt-bottom,.bt-fight.intro .bt-side-ctl,
@@ -419,7 +469,7 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
 .bt-box .bt-sub2{font-weight:800;color:#ffd96a}
 .bt-box.bt-dark h2{letter-spacing:.02em}
 .bt-tp{cursor:default}
-@media (max-width:640px){ .bt-act .bt-acc{display:none} }
+@media (max-width:640px),(max-height:500px){ .bt-act .bt-acc{display:none} }
 `;
   function injectStyle() {
     if (document.getElementById('bt-style')) return;
@@ -655,7 +705,7 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
     const scr = el('div', 'bt-screen bt-tour');
     const head = el('div', 'bt-head bt-steel');
     head.innerHTML = `<img class="bt-head-ico" src="${iconUrl('trophy', 40)}" alt="">` +
-      `<div class="bt-titles"><div class="bt-title">TOURNOI</div><div class="bt-sub">${esc(P.name)} — ${Math.min(cleared, stages.length)} / ${stages.length} étapes gagnées</div></div>`;
+      `<div class="bt-titles"><div class="bt-title">TOURNOI</div><div class="bt-sub"><span class="bt-sub-park">${esc(P.name)} — </span>${Math.min(cleared, stages.length)} / ${stages.length} étapes gagnées</div></div>`;
     const tabs = el('div', 'bt-tabs');
     const order = (PC.DATA && PC.DATA.PARK_ORDER) || ['land', 'sea', 'ice'];
     const short = { land: 'Terre', sea: 'Mer', ice: 'Glace' };
@@ -831,26 +881,33 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
     cur.stage = n;
     cur.tier = null;
     markSelected();
-    renderSide();
+    renderSide(true);
   }
+  /** Short warning pinned just above the COMBAT button: always on screen, never moves the layout. */
   function flashHint(text) {
     if (!cur || !cur.side) return;
-    let h = cur.side.querySelector('.bt-lockmsg');
-    if (!h) { h = el('div', 'bt-hint bt-lockmsg'); cur.side.prepend(h); }
+    const host = cur.side.querySelector('.bt-side-foot') || cur.side;
+    let h = host.querySelector('.bt-toast');
+    if (!h) { h = el('div', 'bt-toast'); h.setAttribute('role', 'status'); host.appendChild(h); }
     h.textContent = text;
-    h.style.color = '#ffd23a';
     clearTimeout(cur.hintT);
     cur.hintT = setTimeout(() => { if (h.parentNode) h.remove(); }, 2600);
   }
 
-  /** Stage detail: opponent, medal tier, enemy team, reward, team picker and the big COMBAT button. */
-  function renderSide() {
-    const park = cur.park, side = cur.side, st = stageDef(park, cur.stage);
+  /**
+   * Stage detail: opponent, medal tier, enemy team, reward and team picker scroll in the panel; the big
+   * COMBAT button sits in a footer that is always visible. newStage: scroll the details back to the top.
+   */
+  function renderSide(newStage) {
+    const park = cur.park, st = stageDef(park, cur.stage);
     if (!st) return;
     const medal = medalOf(park, st.stage);
     if (!cur.tier || cur.tier > Math.min(3, medal + 1)) cur.tier = Math.min(3, medal + 1);
     const tier = cur.tier, npc = npcOf(st.opponent);
-    side.innerHTML = '';
+    const old = cur.side.querySelector('.bt-side-in'), keepTop = old && !newStage ? old.scrollTop : 0;
+    cur.side.innerHTML = '';
+    const side = el('div', 'bt-side-in'), foot = el('div', 'bt-side-foot');
+    cur.side.append(side, foot);
     // opponent
     const opp = el('div', 'bt-opp bt-dark');
     opp.appendChild(npcCanvas(npc.look, 78, 94));
@@ -907,7 +964,12 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
           const i = picked.indexOf(o.id);
           if (i >= 0) picked.splice(i, 1);
           else if (picked.length < 3) picked.push(o.id);
-          else { sfx('error'); flashHint('3 créatures maximum ! Retire-en une d’abord.'); return; }
+          else {
+            sfx('error');
+            if (c.animate) c.animate([{ transform: 'translateX(0)' }, { transform: 'translateX(-5px)' }, { transform: 'translateX(5px)' }, { transform: 'translateX(0)' }], { duration: 240 });
+            flashHint('3 créatures maximum ! Retire-en une d’abord.');
+            return;
+          }
           sfx('click');
           const sc = pcards.scrollLeft;
           renderSide();
@@ -931,8 +993,9 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
         enemies,
       });
     };
-    side.appendChild(go);
-    side.insertAdjacentHTML('beforeend', `<div class="bt-hint">${team.length ? 'L’ordre de sélection est l’ordre d’entrée dans l’arène.' : ''}</div>`);
+    foot.appendChild(go);
+    if (team.length) foot.insertAdjacentHTML('beforeend', '<div class="bt-hint">L’ordre de sélection est l’ordre d’entrée dans l’arène.</div>');
+    side.scrollTop = keepTop;
   }
 
   // ================================================================ map painting
@@ -1732,10 +1795,11 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
   const aliveIdx = team => team.map((f, i) => (f.ko ? -1 : i)).filter(i => i >= 0);
 
   /** Battle camera (§11.6): the player stands large in the foreground lower-left, the enemy smaller further back. */
-  function fightLayout(W, H) {
+  function fightLayout(W, H, barTop) {
     const portrait = H > W * 1.1;
     const floorTop = Math.round(portrait ? H * 0.4 : H * 0.46);
-    const yFront = Math.round(portrait ? H - 168 : H * 0.87);
+    // the player's feet stay above the move buttons (short landscape phones would hide the creature behind them)
+    const yFront = Math.round(Math.min(portrait ? H - 168 : H * 0.87, barTop > floorTop + 60 ? barTop - 6 : H));
     const yBack = Math.round(floorTop + (yFront - floorTop) * (portrait ? 0.27 : 0.24));
     return { W, H, portrait, floorTop, yFront, yBack, px: W * (portrait ? 0.36 : 0.31), ex: W * (portrait ? 0.68 : 0.66) };
   }
@@ -2379,12 +2443,14 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
     ctx.fillStyle = 'rgba(0,0,0,.25)';
     for (let i = -2; i < W / 24 + 2; i++) { ctx.beginPath(); ctx.moveTo(i * 24, cy + bh); ctx.lineTo(i * 24 + 12, cy + bh); ctx.lineTo(i * 24 + 12 + bh * 2, cy - bh); ctx.lineTo(i * 24 + bh * 2, cy - bh); ctx.closePath(); ctx.fill(); }
     ctx.restore();
-    const size = clamp(bh * 0.58, 22, 40);
+    let size = clamp(bh * 0.58, 22, 40);
     ctx.font = `${Math.round(size)}px ${FD}`;
+    const tw = ctx.measureText(B.txt).width + 8;          // + the outline
+    if (tw > W * 0.9) { size = Math.max(12, size * W * 0.9 / tw); ctx.font = `${Math.round(size)}px ${FD}`; }
     ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.lineJoin = 'round';
     ctx.translate(W / 2, cy - bh * 0.12);
     ctx.rotate(-Math.atan2(bh * 0.25, W));
-    ctx.lineWidth = 7; ctx.strokeStyle = '#140805'; ctx.strokeText(B.txt, 0, 0);
+    ctx.lineWidth = Math.max(4, size * 0.18); ctx.strokeStyle = '#140805'; ctx.strokeText(B.txt, 0, 0);
     ctx.fillStyle = '#fff'; ctx.fillText(B.txt, 0, 0);
     ctx.restore();
   }
@@ -2539,7 +2605,7 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
     if (res.crit) { addText(F, bp.x, ly, 'CRITIQUE !', { size: 0.95, col: '#ff7a1c', stroke: '#2a0a00', rise: 50, max: 1.4, jitter: 0.6 }); ly -= textSize(F, 0.95); }
     if (res.cm > 1) addText(F, bp.x, ly, 'Super efficace !', { size: 0.75, col: '#8cff5a', stroke: '#0c2a06', rise: 44, max: 1.5 });
     else if (res.cm < 1) addText(F, bp.x, ly, 'Peu efficace…', { size: 0.7, col: '#a8c4dc', stroke: '#14202a', rise: 40, max: 1.5 });
-    sfx(res.crit ? 'crit' : 'hit', { power: pw });
+    sfx(res.crit ? 'crit' : 'hit', { power: clamp(0.5 + (pw - 1) * 0.4, 0, 1) });   // audio power is 0..1 (normal hit 0.5)
     hud(F);
   }
 
@@ -3022,8 +3088,16 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
         if (F.aborted && !F.dead) {                                    // « Abandonner » during an animation
           F.aborted = false; F.tweens = []; F.timeScale = 1; F.cine = false; F.vs = null;
           F.ui.scr.classList.remove('cine', 'intro');
-          Object.assign(F.fxs, { dim: 0, bars: 0, tint: 0, speed: 0 });
-          Object.assign(F.cam, { x: F.L.W / 2, y: F.L.H / 2, z: 1 });
+          Object.assign(F.fxs, { dim: 0, bars: 0, tint: 0, speed: 0, flash: 0 });
+          Object.assign(F.cam, { x: F.L.W / 2, y: F.L.H / 2, z: 1, rot: 0, shake: 0 });
+          // the interrupted move left its attacker mid-lunge: put everyone back home, clear the move's effects
+          for (const side of ['p', 'e']) {
+            (side === 'p' ? F.P : F.E).forEach(f => {
+              if (f.ko) { f.v.visible = false; f.v.trail = f.v.dust = false; }
+              else if (f === active(F, side)) f.v = Object.assign(freshVis(), { visible: true });
+            });
+          }
+          F.texts = []; F.slashes = []; F.jaws = []; F.arcs = []; F.rays = []; F.banner = null;
           finishFight(F, false, true).catch(err => { if (err !== STOP) console.error('battle', err); });
         }
         return;
@@ -3041,7 +3115,7 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
     let reward = {}, medal = 0;
     if (o.custom) {
       try { if (typeof o.onEnd === 'function') reward = o.onEnd(!!won, { fled: !!fled }) || {}; } catch (e) { console.error('battle onEnd', e); }
-    } else {
+    } else if (!fled) {                     // fleeing is not a defeat: no consolation XP (it could be farmed)
       const E = ENG();
       try { if (E && typeof E.recordBattle === 'function') reward = E.recordBattle(F.park, o.stage, !!won, o.tier || 1) || {}; } catch (e) { console.error('recordBattle', e); }
       const after = medalOf(F.park, o.stage);
@@ -3402,7 +3476,8 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
     const dpr = Math.min(2, window.devicePixelRatio || 1);
     F.ui.cv.width = Math.round(W * dpr); F.ui.cv.height = Math.round(HH * dpr);
     F.dpr = dpr;
-    F.L = fightLayout(W, HH);
+    const acts = F.ui.scr.querySelector('.bt-acts'), ab = acts && acts.getBoundingClientRect();
+    F.L = fightLayout(W, HH, ab && ab.height ? ab.top - r.top : HH);
     layoutFighters(F);
     buildArenaBg(F);
     if (!F.cine) Object.assign(F.cam, { x: W / 2, y: HH / 2, z: 1 });
@@ -3503,6 +3578,7 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
     const F = fight;
     if (e.key === 'Escape') {
       e.preventDefault();
+      e.stopImmediatePropagation();       // the park UI must not also close its (hidden) level-up / story modals
       if (!F) { BT.close(); return; }
       if (F.modal) { if (F.modalDismiss) F.modalDismiss(); return; }
       if (F.phase !== 'end') showPause(F);
@@ -3531,7 +3607,7 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
       document.body.appendChild(root);
       cur = { park, stage: opts.stage || null, tier: opts.tier || null, onClose: opts.onClose || null };
       if (!resizeH) { resizeH = onResize; window.addEventListener('resize', resizeH); }
-      if (!keyH) { keyH = onKey; window.addEventListener('keydown', keyH); }
+      if (!keyH) { keyH = onKey; window.addEventListener('keydown', keyH, true); }
       showTournament();
       return true;
     } catch (e) {
@@ -3547,7 +3623,7 @@ button.bt-steel{background:repeating-linear-gradient(90deg,rgba(255,255,255,.06)
     root.remove();
     root = null; cur = null;
     if (resizeH) { window.removeEventListener('resize', resizeH); resizeH = null; }
-    if (keyH) { window.removeEventListener('keydown', keyH); keyH = null; }
+    if (keyH) { window.removeEventListener('keydown', keyH, true); keyH = null; }
     if (fightMusic) { fightMusic = false; parkMusic(); }
     if (onClose) { try { onClose(); } catch (e) { /* ignore */ } }
   };

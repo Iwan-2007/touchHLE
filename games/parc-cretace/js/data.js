@@ -35,7 +35,8 @@
   // Buildings
   // Coin buildings produce automatically (`produce` = one cycle, then Collecter).
   // Food buildings must be « Activés »: the player picks one of 3 `orders`
-  // ({name, sec, amount}); shorter orders give more food per minute. `produce`
+  // ({name, sec, amount}); shorter orders give more food per minute (the shortest lasts at least 3 min,
+  // so a child who checks in every few minutes gets as much food as one who taps every minute). `produce`
   // mirrors the first (shortest) order for fallbacks and market cards.
   // Every non-special building can be upgraded (levels 1–5, handled by the engine).
   // ---------------------------------------------------------------------------
@@ -71,8 +72,8 @@
   SPECIAL('lab_land', 'land', [3, 3], 'Laboratoire ADN', 'lab', 'Le Dr Morel y décode l’ADN fossile pour recréer des espèces disparues.');
   SPECIAL('arena_land', 'land', [4, 4], 'Arène des Rangers', 'arena', 'Tournois amicaux contre les dresseurs des parcs voisins.');
   // food (food_land) — orders: [sec, amount]
-  FARM('fern_farm', 'land', [2, 2], 'Ferme de fougères', 1, 150, [[60, 50], [600, 350], [3600, 1500]], 'Des fougères tendres qui repoussent en un clin d’œil.');
-  FARM('fruit_orchard', 'land', [2, 2], 'Verger tropical', 3, 1500, [[120, 200], [900, 1100], [7200, 5400]], 'Mangues, goyaves et figues : le dessert préféré des herbivores.');
+  FARM('fern_farm', 'land', [2, 2], 'Ferme de fougères', 1, 150, [[180, 150], [600, 350], [3600, 1500]], 'Des fougères tendres qui repoussent en un clin d’œil.');
+  FARM('fruit_orchard', 'land', [2, 2], 'Verger tropical', 3, 1500, [[240, 400], [900, 1100], [7200, 5400]], 'Mangues, goyaves et figues : le dessert préféré des herbivores.');
   FARM('meat_market', 'land', [2, 2], 'Marché aux viandes', 7, 5000, [[300, 750], [1800, 3000], [7200, 8400]], 'De gros steaks pour les appétits de carnivores.');
   FARM('crops_harbor', 'land', [3, 3], 'Port des récoltes', 9, 12000, [[600, 2400], [3600, 9000], [14400, 24000]], 'Un cargo, des grues et des conteneurs pleins de nourriture fraîche.');
   // coins
@@ -97,7 +98,7 @@
   SPECIAL('gate_sea', 'sea', [3, 2], 'Porte du Lagon', 'gate', 'Une arche de corail qui accueille les visiteurs du lagon.');
   SPECIAL('lab_sea', 'sea', [3, 3], 'Laboratoire marin', 'lab', 'Inès y étudie l’ADN des géants des mers.');
   SPECIAL('arena_sea', 'sea', [4, 4], 'Arène du Récif', 'arena', 'Un stade rouge et blanc posé au fond du lagon.');
-  FARM('fish_farm', 'sea', [2, 2], 'Ferme à poissons', 5, 500, [[60, 60], [600, 420], [3600, 1800]], 'Des bancs de sardines bien dodues.');
+  FARM('fish_farm', 'sea', [2, 2], 'Ferme à poissons', 5, 500, [[180, 180], [600, 420], [3600, 1800]], 'Des bancs de sardines bien dodues.');
   FARM('krill_net', 'sea', [2, 2], 'Filets à krill', 7, 4000, [[300, 600], [1800, 2400], [7200, 7200]], 'Des millions de petites crevettes pour les gros appétits.');
   SHOP('shell_shop', 'sea', [2, 2], 'Boutique de coquillages', 5, 1500, 180, 120, 'Colliers de coquillages et dents de requin (fausses, promis).');
   SHOP('submarine_dock', 'sea', [3, 3], 'Port des sous-marins', 6, 6000, 1000, 300, 'Une balade en sous-marin jaune au milieu des créatures.');
@@ -118,7 +119,7 @@
   SPECIAL('harbor_ice', 'ice', [4, 3], 'Port d’arrivée', 'gate', 'Le quai où accostent les aéroglisseurs, avec ses hangars et son tunnel dans la falaise.');
   SPECIAL('lab_ice', 'ice', [3, 3], 'Laboratoire polaire', 'lab', 'On y réveille l’ADN conservé dans la glace depuis des millénaires.');
   SPECIAL('arena_ice', 'ice', [4, 4], 'Arène de Glace', 'arena', 'Une arène taillée dans un glacier. Attention, ça glisse !');
-  FARM('hunter_lodge', 'ice', [2, 2], 'Cabane du pisteur', 10, 1500, [[120, 200], [900, 1100], [7200, 5400]], 'Oleg y prépare les réserves de viande pour l’hiver.');
+  FARM('hunter_lodge', 'ice', [2, 2], 'Cabane du pisteur', 10, 1500, [[240, 400], [900, 1100], [7200, 5400]], 'Oleg y prépare les réserves de viande pour l’hiver.');
   FARM('cold_storage', 'ice', [2, 2], 'Chambre froide', 12, 8000, [[300, 900], [1800, 3600], [7200, 10800]], 'Un immense garde-manger glacé. Pas besoin de frigo ici !');
   SHOP('fur_shop', 'ice', [2, 2], 'Boutique polaire', 10, 3000, 300, 120, 'Bonnets à pompon, moufles et écharpes toutes douces.');
   SHOP('hot_chocolate', 'ice', [2, 2], 'Chalet du chocolat chaud', 11, 8000, 1000, 300, 'Un chocolat chaud avec une montagne de chantilly.');
@@ -141,12 +142,13 @@
   DATA.START = { coins: 6000, dollars: 25, food_land: 600, food_sea: 0, food_ice: 0, level: 1, xp: 0 };
   DATA.MAX_PLAYER_LEVEL = 30;
 
-  // XP needed to go from level L to L+1 (index = L). Tuned with a player simulation:
-  // level 2 ≈ 3 min, level 5 ≈ 25 min, level 10 ≈ 1 h 45 of active play.
+  // XP needed to go from level L to L+1 (index = L). Tuned with a player simulation (real engine,
+  // story + side missions, 3 farms): checking in every 3 min → level 2 ≈ 3 min, level 5 ≈ 25–30 min,
+  // level 10 ≈ 1 h 30–1 h 45; tapping every minute or upgrading every farm is about a third faster.
   const XP_TABLE = [0,
-    600, 700, 1050, 1350, 1900, 2200, 2600, 3000, 3400, // 1..9
-    4200, 5000, 5800, 6700, 7700, 8800, 10000, 11300, 12700, 14200, // 10..19
-    15800, 17500, 19300, 21200, 23200, 25300, 27500, 29800, 32200, 34700, // 20..29
+    500, 650, 950, 1200, 2100, 2700, 3300, 3800, 4300, // 1..9
+    4800, 5700, 6600, 7600, 8700, 9900, 11200, 12600, 14100, 15700, // 10..19
+    17400, 19200, 21100, 23100, 25200, 27400, 29700, 32100, 34600, 37200, // 20..29
   ];
   /** XP needed to go from `level` to `level + 1` (finite even at MAX_PLAYER_LEVEL; the engine caps the level). */
   DATA.xpToNext = function (level) {
@@ -163,7 +165,9 @@
     return { coins, dollars };
   };
 
-  DATA.XP = { feed: 4, collect: 1, creatureLevel: 10, researchAttempt: 20, researchSuccess: 50 };
+  // Feeding gives max(feed, round(food spent × feedPerFood)) XP, so XP keeps pace with the food
+  // a creature eats as it grows (food, i.e. farms, is the main road to the next player level).
+  DATA.XP = { feed: 4, feedPerFood: 0.25, collect: 1, creatureLevel: 10, researchAttempt: 20, researchSuccess: 50 };
   // Multi-step DNA research (SPEC §11.8): each attempt costs ceil(research.cost / steps) coins;
   // a failed attempt can be re-run for retryCost instead of paying coins again.
   DATA.RESEARCH = {
@@ -173,12 +177,15 @@
     retryCost: { dollars: 1 },
   };
   // DNA expeditions (SPEC §11.8): one at a time; success = research completed instantly,
-  // failure = « Dernière chance » to buy the amber for buyDollars. cost = coins per expedition.
+  // failure = « Dernière chance » to buy the amber for buyDollars. Coins per expedition =
+  // max(cost[rarity], costMult × the species' research cost): the expedition is the quick all-or-nothing
+  // gamble, never a discount on the step-by-step research (whose failed steps can be retried for 1 $).
   DATA.EXPEDITION = {
     durationSec: { commun: 60, rare: 120, super: 240, legendaire: 420, mythique: 600 },
     chance: { commun: 60, rare: 55, super: 45, legendaire: 40, mythique: 35 },
     cost: { commun: 600, rare: 2500, super: 9000, legendaire: 25000, mythique: 60000 },
-    buyDollars: { commun: 3, rare: 6, super: 12, legendaire: 25, mythique: 40 },
+    costMult: 1,
+    buyDollars: { commun: 6, rare: 12, super: 25, legendaire: 45, mythique: 80 },
     vehicle: { land: 'Jeep d’exploration', sea: 'Sous-marin', ice: 'Chenillette des neiges' },
     promo: { everySec: 1800, durationSec: 300, discount: 0.3 },
   };
@@ -231,8 +238,10 @@
   // ---------------------------------------------------------------------------
   // Story missions (one active at a time, in order)
   // ---------------------------------------------------------------------------
-  /** M(id, park, npc, title, intro[], goal, reward, outro) */
-  const M = (id, park, npc, title, intro, goal, reward, outro) => ({ id, park, title, npc, intro, goal, reward, outro });
+  /** M(id, park, npc, title, intro[], goal, reward, outro, since?) — `since` marks a mission added after
+      the first release (story revision); the engine uses it to keep old saves on the right mission. */
+  const M = (id, park, npc, title, intro, goal, reward, outro, since) =>
+    Object.assign({ id, park, title, npc, intro, goal, reward, outro }, since ? { since } : {});
 
   DATA.MISSIONS = [
     // ----- Parc Terrestre (Élise, Marco, Krane) -----
@@ -273,6 +282,12 @@
     ], { type: 'own_species', park: 'land', count: 2 }, { coins: 600, food_land: 200, xp: 30 },
     'Deux espèces ! Notre parc ressemble de plus en plus à un vrai parc.'),
 
+    M('m06b', 'land', 'elise', 'Des fougères à volonté', [
+      'Deux espèces, ça mange beaucoup ! Et plus elles mangent, plus tu gagnes d’expérience.',
+      'Construis d’autres Fermes de fougères : il t’en faut 3 en tout.',
+    ], { type: 'own_building', building: 'fern_farm', count: 3 }, { coins: 400, xp: 30 },
+    'Quel potager ! Active chaque ferme : plus de fermes, c’est plus de nourriture… et des niveaux plus vite !', 2),
+
     M('m07', 'land', 'elise', 'Un parc tout beau', [
       'Les familles adorent les jolis parcs.',
       'Place 3 décorations : palmiers, fleurs, torches… à toi de choisir !',
@@ -282,7 +297,7 @@
     M('m08', 'land', 'elise', 'Objectif niveau 3', [
       'Mon laboratoire ADN est presque prêt.',
       'Au niveau 3, nous pourrons décoder l’ADN du Vélociraptor !',
-      'Nourris tes créatures et construis pour gagner de l’expérience.',
+      'Active tes fermes et nourris tes créatures : c’est comme ça qu’on gagne le plus d’expérience.',
     ], { type: 'player_level', level: 3 }, { coins: 1500 },
     'Niveau 3 ! Le séquenceur ADN est allumé, viens vite au labo.'),
 
@@ -305,11 +320,12 @@
     ], { type: 'build', building: 'fruit_orchard', count: 1 }, { food_land: 300, xp: 40 },
     'Des mangues, des goyaves… nos dinos vont adorer.'),
 
-    M('m12', 'land', 'elise', 'Grandir vite', [
+    M('m12', 'land', 'elise', 'Le tank vivant', [
       'Une créature bien nourrie rapporte plus de pièces et frappe plus fort en tournoi.',
-      'Fais monter une créature jusqu’au niveau 5.',
-    ], { type: 'creature_level', level: 5 }, { coins: 1000, xp: 40 },
-    'Niveau 5 ! Au niveau 10, elle évoluera en Juvénile, tu verras.'),
+      'Au niveau 4, l’Ankylosaure arrive au MARCHÉ : une carapace de tank et une queue en massue !',
+      'Fais éclore un Ankylosaure et nourris-le jusqu’au niveau 5.',
+    ], { type: 'creature_level', species: 'ankylosaurus', level: 5 }, { coins: 1500, xp: 60 },
+    'Quelle carapace ! Avec lui, les Chasseurs n’ont qu’à bien se tenir.'),
 
     M('m13', 'land', 'krane', 'Le rival', [
       'Ha ! Alors c’est toi, le nouveau directeur ?',
@@ -355,17 +371,18 @@
     ], { type: 'own_species', park: 'sea', count: 1 }, { food_sea: 300, xp: 50 },
     'Il nage déjà comme un champion ! Regarde toutes ces bulles.'),
 
-    M('s04', 'sea', 'ines', 'Festin sous la mer', [
-      'Les bébés marins grandissent vite quand on les nourrit bien.',
+    // The sea evolution comes right after the first sea hatch, so the creature is still a baby when it starts.
+    M('s04', 'sea', 'elise', 'Évolution sous-marine', [
+      'Élise au micro ! Inès m’a dit que notre bébé marin grandit à vue d’œil.',
+      'Au niveau 10, un bébé devient Juvénile. Fais monter une créature marine au niveau 10.',
+    ], { type: 'creature_level', park: 'sea', level: 10 }, { coins: 2500, dollars: 5, xp: 80 },
+    'Regarde-la nager ! Plus grande, plus forte… et toujours aussi gourmande.'),
+
+    M('s05', 'sea', 'ines', 'Festin sous la mer', [
+      'Nos pensionnaires marins ont un appétit d’ogre !',
       'Nourris tes créatures 10 fois.',
     ], { type: 'feed', count: 10 }, { coins: 1500, food_sea: 300, xp: 40 },
     'Quel appétit ! On dirait une baleine devant un buffet.'),
-
-    M('s05', 'sea', 'elise', 'Première évolution', [
-      'Élise au micro ! Inès m’a appelée : une de nos créatures va bientôt évoluer !',
-      'Au niveau 10, un bébé devient Juvénile. Fais monter une créature au niveau 10.',
-    ], { type: 'creature_level', level: 10 }, { coins: 2500, dollars: 5, xp: 80 },
-    'Incroyable ! Plus grande, plus forte… et toujours aussi gourmande.'),
 
     M('s06', 'sea', 'marco', 'Le récif des champions', [
       'Marco ici ! L’arène du Récif est ouverte.',
@@ -375,6 +392,7 @@
 
     M('s07', 'sea', 'ines', 'Le ballet des nageoires', [
       'Plus il y a d’espèces, plus nos visiteurs sont émerveillés.',
+      'Au niveau 6, je pourrai décoder l’ADN du Dunkleosteus au LABO ADN. Au niveau 7 arrive le Plésiosaure.',
       'Possède 3 espèces différentes dans le Parc Aquatique.',
     ], { type: 'own_species', park: 'sea', count: 3 }, { coins: 3000, food_sea: 500, xp: 100 },
     'Regarde-les nager ensemble… On dirait un ballet.'),
@@ -384,6 +402,24 @@
       'Mes champions des mers vont te noyer sous les bulles. Viens à l’étape 4 si tu oses !',
     ], { type: 'battle_stage', park: 'sea', stage: 4 }, { coins: 4000, dollars: 8, xp: 150 },
     'Impossible ! Bon… savoure ta victoire, elle ne durera pas !'),
+
+    M('s08b', 'sea', 'ines', 'Grands travaux', [
+      'Nos bâtiments commencent à être un peu petits pour tous ces visiteurs.',
+      'Touche une ferme ou un commerce, puis AMÉLIORER : il produira beaucoup plus !',
+    ], { type: 'upgrade', count: 1 }, { coins: 2000, xp: 120 },
+    'Tout beau, tout neuf ! Chaque amélioration te rapporte aussi de l’expérience.', 2),
+
+    M('s08c', 'sea', 'ines', 'Le lagon s’agrandit', [
+      'Le Tylosaure, le Plésiosaure, le Dunkleosteus… l’océan a encore tant de surprises !',
+      'Possède 4 espèces différentes dans le Parc Aquatique.',
+    ], { type: 'own_species', park: 'sea', count: 4 }, { coins: 4000, food_sea: 800, xp: 150 },
+    'Quatre espèces ! Les visiteurs collent leur nez contre les vitres.', 2),
+
+    M('s08d', 'sea', 'marco', 'Plongée en eaux profondes', [
+      'Marco ici ! Les dresseurs de la fosse obscure t’attendent.',
+      'Nourris bien ton équipe, puis remporte l’étape 6 du tournoi aquatique.',
+    ], { type: 'battle_stage', park: 'sea', stage: 6 }, { coins: 5000, dollars: 5, xp: 200 },
+    'Quelle plongée ! Même les poissons-lanternes t’applaudissent.', 2),
 
     M('s09', 'sea', 'ines', 'Message du Grand Nord', [
       'Un pisteur des glaces, Oleg Varga, a trouvé des traces géantes dans la neige.',
@@ -455,7 +491,9 @@
   // Tournament stages (enemies only from that park)
   // ---------------------------------------------------------------------------
   /** T(stage, name, opponent, suggested player level, [[species, level], ...], reward).
-      `level` is only a hint for the UI (« Niveau conseillé »); stages unlock in order. */
+      `level` is only a hint for the UI (« Niveau conseillé »); stages unlock in order.
+      Tuned with a battle simulation so each stage is a bit harder than the previous one (team strength
+      about ×1.2–1.6 per stage; ×2 only where a second enemy joins after stage 1). */
   const T = (stage, name, opponent, level, enemies, reward) => ({
     stage, name, opponent, level, enemies: enemies.map(e => ({ species: e[0], level: e[1] })), reward,
   });
@@ -463,13 +501,13 @@
   DATA.BATTLE_STAGES = {
     land: [
       T(1, 'Premier combat', 'tom', 2, [['gallimimus', 1]], { coins: 400, xp: 15 }),
-      T(2, 'L’apprenti ranger', 'tom', 2, [['stegosaurus', 7], ['gallimimus', 7]], { coins: 400, xp: 15 }),
-      T(3, 'Le Club des Griffes', 'lea', 3, [['gallimimus', 9], ['parasaurolophus', 9]], { coins: 800, xp: 25, dollars: 2 }),
+      T(2, 'L’apprenti ranger', 'tom', 2, [['stegosaurus', 3], ['gallimimus', 2]], { coins: 400, xp: 15 }),
+      T(3, 'Le Club des Griffes', 'lea', 3, [['gallimimus', 5], ['parasaurolophus', 5]], { coins: 800, xp: 25, dollars: 2 }),
       T(4, 'Griffes affûtées', 'lea', 3, [['triceratops', 6], ['velociraptor', 5]], { coins: 800, xp: 25 }),
-      T(5, 'Le défi de Krane', 'krane', 4, [['velociraptor', 6], ['ankylosaurus', 5], ['gallimimus', 6]], { coins: 1800, xp: 60, dollars: 5 }),
+      T(5, 'Le défi de Krane', 'krane', 4, [['velociraptor', 5], ['ankylosaurus', 4], ['gallimimus', 5]], { coins: 1800, xp: 60, dollars: 5 }),
       T(6, 'La Brigade des Volcans', 'amara', 5, [['parasaurolophus', 9], ['ankylosaurus', 8], ['dilophosaurus', 8]], { coins: 1700, xp: 55, dollars: 3 }),
       T(7, 'Coulée de lave', 'amara', 6, [['pteranodon', 9], ['ankylosaurus', 9], ['brachiosaurus', 8]], { coins: 2200, xp: 75 }),
-      T(8, 'Examen de ranger', 'marco', 6, [['dilophosaurus', 12], ['brachiosaurus', 11], ['triceratops', 12]], { coins: 2200, xp: 75 }),
+      T(8, 'Examen de ranger', 'marco', 6, [['dilophosaurus', 12], ['brachiosaurus', 12], ['triceratops', 13]], { coins: 2200, xp: 75 }),
       T(9, 'Revanche griffue', 'lea', 7, [['velociraptor', 13], ['pachycephalosaurus', 12], ['dilophosaurus', 12]], { coins: 2800, xp: 95, dollars: 3 }),
       T(10, 'Krane contre-attaque', 'krane', 8, [['carnotaurus', 7], ['brachiosaurus', 10], ['pachycephalosaurus', 10]], { coins: 5100, xp: 170, dollars: 8 }),
       T(11, 'Le sentier des géants', 'amara', 9, [['diplodocus', 10], ['pteranodon', 12], ['ankylosaurus', 13]], { coins: 4050, xp: 135 }),
@@ -485,9 +523,9 @@
     ],
     sea: [
       T(1, 'Baptême de plongée', 'ines', 5, [['ichthyosaurus', 1]], { coins: 1700, xp: 55 }),
-      T(2, 'Vagues et écume', 'nina', 6, [['ichthyosaurus', 5], ['archelon', 5]], { coins: 2200, xp: 75 }),
-      T(3, 'Le récif de corail', 'nina', 6, [['archelon', 8]], { coins: 2200, xp: 75, dollars: 3 }),
-      T(4, 'Les requins de Krane', 'krane', 7, [['dunkleosteus', 4], ['plesiosaurus', 3], ['ichthyosaurus', 7]], { coins: 4150, xp: 140, dollars: 5 }),
+      T(2, 'Vagues et écume', 'nina', 6, [['ichthyosaurus', 3], ['archelon', 3]], { coins: 2200, xp: 75 }),
+      T(3, 'Le récif de corail', 'nina', 6, [['archelon', 6], ['ichthyosaurus', 6]], { coins: 2200, xp: 75, dollars: 3 }),
+      T(4, 'Les requins de Krane', 'krane', 7, [['dunkleosteus', 3], ['plesiosaurus', 3], ['ichthyosaurus', 5]], { coins: 4150, xp: 140, dollars: 5 }),
       T(5, 'Courants profonds', 'nina', 8, [['tylosaurus', 5], ['plesiosaurus', 5], ['archelon', 8]], { coins: 3400, xp: 115 }),
       T(6, 'La fosse obscure', 'ines', 9, [['tylosaurus', 7], ['dunkleosteus', 7], ['plesiosaurus', 7]], { coins: 4050, xp: 135, dollars: 3 }),
       T(7, 'Le grand requin', 'nina', 10, [['megalodon', 2], ['plesiosaurus', 6], ['dunkleosteus', 6]], { coins: 4750, xp: 160 }),
@@ -499,10 +537,10 @@
     ],
     ice: [
       T(1, 'Premiers pas dans la neige', 'oleg', 10, [['dodo', 1]], { coins: 4750, xp: 160 }),
-      T(2, 'La piste des traîneaux', 'bjorn', 11, [['megaloceros', 12], ['dodo', 12]], { coins: 5450, xp: 180 }),
-      T(3, 'Le hurlement du loup', 'bjorn', 11, [['direwolf', 7], ['glyptodon', 7]], { coins: 5450, xp: 180, dollars: 4 }),
-      T(4, 'Le blizzard de Krane', 'krane', 12, [['woollyrhino', 9], ['direwolf', 9], ['megaloceros', 10]], { coins: 9350, xp: 310, dollars: 5 }),
-      T(5, 'Le col gelé', 'bjorn', 13, [['smilodon', 9], ['glyptodon', 11], ['dodo', 12]], { coins: 7050, xp: 235 }),
+      T(2, 'La piste des traîneaux', 'bjorn', 11, [['megaloceros', 5], ['dodo', 4]], { coins: 5450, xp: 180 }),
+      T(3, 'Le hurlement du loup', 'bjorn', 11, [['direwolf', 5], ['glyptodon', 5]], { coins: 5450, xp: 180, dollars: 4 }),
+      T(4, 'Le blizzard de Krane', 'krane', 12, [['woollyrhino', 8], ['direwolf', 8], ['megaloceros', 8]], { coins: 9350, xp: 310, dollars: 5 }),
+      T(5, 'Le col gelé', 'bjorn', 13, [['smilodon', 6], ['glyptodon', 10], ['dodo', 11]], { coins: 7050, xp: 235 }),
       T(6, 'La grotte de l’ours', 'oleg', 14, [['megatherium', 10], ['woollyrhino', 11], ['direwolf', 11]], { coins: 7850, xp: 260, dollars: 4 }),
       T(7, 'Aurores boréales', 'bjorn', 15, [['arctodus', 12], ['smilodon', 13], ['glyptodon', 14]], { coins: 8700, xp: 290 }),
       T(8, 'Avalanche de Krane', 'krane', 16, [['mammoth', 8], ['arctodus', 11], ['woollyrhino', 12]], { coins: 14400, xp: 480, dollars: 8 }),
@@ -591,8 +629,9 @@
   // Limited offers (SPEC §11.10): one species at a time, rotating every rotateSec, among species of
   // rarity ≥ minRarity and the `offerOnly` ones (dollar price), from unlocked parks, not yet created.
   // An offered species needs no DNA research and no player level; coin prices get `discount`.
+  // Only species at most maxLevelAhead levels above the player are offered (none at all otherwise).
   // ---------------------------------------------------------------------------
-  DATA.OFFERS = { rotateSec: 86400, minRarity: 'super', discount: 0.2, maxLevelAhead: 6 };
+  DATA.OFFERS = { rotateSec: 86400, minRarity: 'super', discount: 0.2, maxLevelAhead: 4 };
 
   // ---------------------------------------------------------------------------
   // Side missions (« Missions secondaires », SPEC §11.3): `count` active at once, each generated
@@ -602,7 +641,8 @@
   //   text: [singular, plural] with {n} (and {food} = food name of the chosen park)
   //   goal: a mission goal (SPEC §4) plus the engine extras activate / upgrade / cards / expedition;
   //         res 'food' = food of the park where the player has a farm.
-  //   icon: PC.ICONS name ('food' = that park's food icon). needs: condition checked before offering it.
+  //   icon: PC.ICONS / UI icon name ('food' = that park's food icon). needs: condition checked before
+  //   offering it ('farmroom' = a park has fewer than maxFarms food buildings and one can be built).
   // ---------------------------------------------------------------------------
   const SM = (id, icon, npc, title, text, goal, n, reward, extra) => Object.assign({ id, icon, npc, title, text, goal, n, reward }, extra || {});
   DATA.SIDE_MISSIONS = {
@@ -616,19 +656,21 @@
         { type: 'collect', res: 'food' }, [100, 90, 20000], { xp: [15, 4], coins: [200, 80] }, { round: 50, needs: 'farm' }),
       SM('activate', 'clock', 'tom', 'Livraisons express', ['Active une livraison de nourriture.', 'Active {n} livraisons de nourriture.'],
         { type: 'activate' }, [2, 0.15, 6], { xp: [15, 4], coins: [150, 60] }, { needs: 'farm' }),
+      SM('farm', 'leaf', 'elise', 'Toujours plus de récoltes', ['Construis une nouvelle ferme.', 'Construis {n} nouvelles fermes.'],
+        { type: 'build', kind: 'food' }, [1, 0, 1], { xp: [30, 6], coins: [200, 80] }, { needs: 'farmroom', maxFarms: 4, weight: 1.2 }),
       SM('hatch', 'egg', 'elise', 'Une nouvelle naissance', ['Fais éclore une créature.', 'Fais éclore {n} créatures.'],
         { type: 'hatch' }, [1, 0, 1], { xp: [30, 6], coins: [300, 100] }, { needs: 'hatch' }),
       SM('deco', 'star', 'tom', 'Jardinier en chef', ['Place une décoration.', 'Place {n} décorations.'],
         { type: 'build', kind: 'deco' }, [2, 0.15, 6], { xp: [15, 4], coins: [120, 50] }),
-      SM('roads', 'check', 'tom', 'Des allées toutes neuves', ['Construis un morceau de route.', 'Construis {n} morceaux de route.'],
+      SM('roads', 'roads', 'tom', 'Des allées toutes neuves', ['Construis un morceau de route.', 'Construis {n} morceaux de route.'],
         { type: 'build', kind: 'road' }, [4, 0.3, 12], { xp: [10, 3], coins: [100, 40] }),
       SM('battle', 'trophy', 'marco', 'Entraînement au tournoi', ['Gagne un combat au tournoi.', 'Gagne {n} combats au tournoi.'],
         { type: 'win_battle' }, [1, 0.08, 3], { xp: [30, 6], dollars: [2, 0.15] }, { minLevel: 2, needs: 'battle' }),
       SM('research', 'dna', 'elise', 'Séquençage express', ['Lance une tentative de recherche ADN.', 'Lance {n} tentatives de recherche ADN.'],
         { type: 'research', success: false }, [1, 0.05, 3], { xp: [25, 5], coins: [300, 100] }, { minLevel: 3, needs: 'research' }),
-      SM('upgrade', 'star', 'marco', 'Travaux d’amélioration', ['Améliore un bâtiment.', 'Améliore {n} bâtiments.'],
+      SM('upgrade', 'upgrade', 'marco', 'Travaux d’amélioration', ['Améliore un bâtiment.', 'Améliore {n} bâtiments.'],
         { type: 'upgrade' }, [1, 0, 1], { xp: [30, 6], dollars: [2, 0.1] }, { minLevel: 4, needs: 'upgrade' }),
-      SM('cards', 'star', 'tom', 'Le collectionneur', ['Ouvre un paquet de cartes.', 'Ouvre {n} paquets de cartes.'],
+      SM('cards', 'cards', 'tom', 'Le collectionneur', ['Ouvre un paquet de cartes.', 'Ouvre {n} paquets de cartes.'],
         { type: 'cards' }, [1, 0, 1], { xp: [10, 3], coins: [100, 40] }, { weight: 0.6 }),
       SM('expedition', 'dna', 'oleg', 'Chasseur d’ambre', ['Envoie une expédition ADN.', 'Envoie {n} expéditions ADN.'],
         { type: 'expedition' }, [1, 0, 1], { xp: [30, 6], dollars: [2, 0.1] }, { minLevel: 4, needs: 'expedition', weight: 0.7 }),

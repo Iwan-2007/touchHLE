@@ -1,8 +1,9 @@
 /* Crétacé Park — secret codes (cheats).
    Entry points: Options → « Code secret », or tap the level badge 5 times quickly.
    Codes are case-insensitive and ignore accents and spaces:
-     DINOMAX   everything unlocked (level max, all parks, all DNA researched, all tournament stages,
-               huge resources, every egg and timer finished, the limited-offer creature on sale)
+     DINOMAX   everything unlocked (level max, all parks, all DNA researched, every tournament stage won
+               with Bronze — Argent / Or still to win —, huge resources, every egg and timer finished,
+               the limited-offer creature on sale)
      RICHE     lots of coins, dollars and food
      ECLOSION  finish every egg, delivery, research and expedition right now */
 (function (PC) {
@@ -38,10 +39,18 @@
     d.give('coins', 9999999);
     d.give('dollars', 99999);
     for (const f of FOODS) d.give(f, 999999);
-    // Every tournament stage open (medals stay to be won).
+    // Every tournament stage cleared with (at least) Bronze, so every stage and every Argent / Or fight is open.
+    // The engine ties the two together (state.battles[p] = highest stage with a medal, rebuilt on load), so
+    // the medals are written too: Argent and Or stay to be won.
     const stages = (PC.DATA && PC.DATA.BATTLE_STAGES) || {};
     st.battles = st.battles || {};
-    for (const p of Object.keys(stages)) st.battles[p] = Math.max(st.battles[p] || 0, stages[p].length);
+    st.medals = st.medals || {};
+    for (const p of Object.keys(stages)) {
+      const n = stages[p].length;
+      st.battles[p] = Math.max(st.battles[p] || 0, n);
+      const m = st.medals[p] = st.medals[p] || {};
+      for (let s = 1; s <= n; s++) if (!(m[s] >= 1)) m[s] = 1;
+    }
     // Put the offer-only creature on sale for a week.
     const offerOnly = Object.keys(PC.SPECIES || {}).find(id => PC.SPECIES[id].offerOnly && !(E.ownsSpecies && E.ownsSpecies(id)));
     if (offerOnly) st.offer = { speciesId: offerOnly, until: E.now() + 7 * 86400000 };

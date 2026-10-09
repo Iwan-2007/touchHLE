@@ -4374,7 +4374,7 @@
   const cache = new Map(), lastByKey = new Map();
   let cachePx = 0, budget = 0, budgetAt = -1e9, fontsHooked = false;
   const MAX_PX = 14e6, BUDGET = 6;
-  function clearCache() { cache.clear(); lastByKey.clear(); cachePx = 0; tightCache.clear(); thumbCache.clear(); }
+  function clearCache() { cache.clear(); lastByKey.clear(); cachePx = 0; tightCache.clear(); thumbCache.clear(); hitMasks.clear(); }
   BA.clearCache = clearCache;
   function hookFonts() {
     if (fontsHooked) return;
@@ -4673,6 +4673,58 @@
     tightCache.set(key, res);
     return res;
   }
+  // ---------------------------------------------------------------- hit testing (drawn silhouette)
+  const hitMasks = new Map();
+  const MASK_Q = 0.5, MASK_ALPHA = 96, MASK_M = 40;   // mask px per canonical px, opacity threshold, margin around bboxOf
+  /** Opacity mask of a building's art (static + animated parts at rest + level decorations); faint glows/smoke excluded. */
+  function hitMask(d, b, lvl) {
+    const key = keyOf(d, b) + '|L' + lvl;
+    if (hitMasks.has(key)) return hitMasks.get(key);
+    let res = null;
+    try {
+      const bb = bboxOf(d), q = MASK_Q, x0 = bb[0] - MASK_M, y0 = bb[1] - MASK_M;
+      const w = Math.ceil((bb[2] - bb[0] + MASK_M * 2) * q), h = Math.ceil((bb[3] - bb[1] + MASK_M * 2) * q);
+      const c = document.createElement('canvas'); c.width = w; c.height = h;
+      const g = c.getContext('2d', { willReadFrequently: true });
+      g.setTransform(q, 0, 0, q, -x0 * q, -y0 * q);
+      g.lineJoin = 'round';
+      withCtx(g, () => { d.draw(b); if (d.anim) d.anim(b); if (lvl) levelFx(d, b, lvl); });
+      const px = g.getImageData(0, 0, w, h).data, data = new Uint8Array(w * h);
+      for (let i = 0; i < w * h; i++) data[i] = px[i * 4 + 3] > MASK_ALPHA ? 1 : 0;
+      res = { x0, y0, w, h, q, data };
+    } catch (e) { res = null; }
+    hitMasks.set(key, res);
+    return res;
+  }
+  /**
+   * Does ctx point (x, y) lie on the drawn silhouette of building `artId` standing on footprint fp
+   * (same fp / opts as BA.draw), within `slop` ctx units (finger tolerance)? Transparent parts (the air above
+   * a round arena's rim, gaps between props) do not count, so taps reach whatever is visible behind.
+   * Returns null when no mask can be built (caller falls back to a box).
+   */
+  BA.hit = function (artId, fp, x, y, opts, slop) {
+    if (!fp || !fp.left || !fp.right || !fp.top || !fp.bottom || typeof document === 'undefined') return null;
+    const d = DEFS[artId] || DEFS._unknown;
+    opts = opts || {};
+    const s = (fp.right[0] - fp.left[0]) / ((d.W + d.D) * HX);
+    if (!(s > 0.005)) return null;
+    const b = makeB(d, 0, opts), bb = bboxOf(d), sl = Math.max(0, +slop || 0) / s;
+    const ax = (x - (fp.top[0] + fp.bottom[0]) / 2) / s + b.cx, ay = (y - (fp.top[1] + fp.bottom[1]) / 2) / s + b.cy;
+    const M = MASK_M + sl;
+    if (ax < bb[0] - M || ax > bb[2] + M || ay < bb[1] - M || ay > bb[3] + M) return false;   // far away: no mask needed
+    const mk = hitMask(d, b, levelOf(artId, d, opts));
+    if (!mk) return null;
+    const mx = Math.floor((ax - mk.x0) * mk.q), my = Math.floor((ay - mk.y0) * mk.q), r = Math.min(12, Math.ceil(sl * mk.q));
+    for (let dy = -r; dy <= r; dy++) {
+      const yy = my + dy;
+      if (yy < 0 || yy >= mk.h) continue;
+      for (let dx = -r; dx <= r; dx++) {
+        const xx = mx + dx;
+        if (xx >= 0 && xx < mk.w && dx * dx + dy * dy <= r * r && mk.data[yy * mk.w + xx]) return true;
+      }
+    }
+    return false;
+  };
   /** Cached thumbnail canvas (w×h px) of a building for market cards. */
   BA.thumb = function (artId, w, h) {
     w = Math.max(1, Math.round(w || 96)); h = Math.max(1, Math.round(h || w));

@@ -13,7 +13,7 @@
 
   const FONT_D = '"Russo One", "Arial Black", Impact, sans-serif';
   const FONT_UI = '"Exo 2", "Trebuchet MS", Arial, sans-serif';
-  const ZMIN = 0.45, ZMAX = 1.8, TAP_PX = 6;
+  const ZMIN = 0.45, ZMAX = 1.8, TAP_PX = 6, HIT_SLOP_PX = 6;   // HIT_SLOP_PX: finger tolerance around building art
 
   // ---------------------------------------------------------------- small math helpers
   const clamp = (v, a, b) => (v < a ? a : v > b ? b : v);
@@ -1851,7 +1851,7 @@
       const [x, y] = toWorld(sx, sy);
       for (let i = hitBubbles.length - 1; i >= 0; i--) {
         const b = hitBubbles[i], dx = x - b.x, dy = y - b.y;
-        if (dx * dx + dy * dy <= b.r * b.r) return { kind: 'bubble', obj: b.obj };
+        if (b.hw ? Math.abs(dx) <= b.hw && Math.abs(dy) <= b.hh : dx * dx + dy * dy <= b.r * b.r) return { kind: 'bubble', obj: b.obj };
       }
       const [u, v] = ISO.toGrid(x, y);
       let best = null, bestD = -Infinity;
@@ -1862,8 +1862,13 @@
           if (d > bestD) { best = o; bestD = d; }
         }
       }
+      const slop = HIT_SLOP_PX / cam.z;
       for (const b of hitBoxes) {
-        if (x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1 && b.d > bestD) { best = b.obj; bestD = b.d; }
+        if (b.d <= bestD) continue;
+        // buildings: only their drawn pixels count, so the air above a round arena's rim does not hide the
+        // creature or enclosure behind it; the rectangle is the fallback when no art mask is available
+        const art = b.art && PC.BUILD_ART && PC.BUILD_ART.hit ? PC.BUILD_ART.hit(b.art, b.fp, x, y, b.opts, slop) : null;
+        if (art === null ? x >= b.x0 && x <= b.x1 && y >= b.y0 && y <= b.y1 : art) { best = b.obj; bestD = b.d; }
       }
       if (best) return { kind: 'object', obj: best };
       return { kind: 'tile', gx: Math.floor(u), gy: Math.floor(v) };
@@ -2065,18 +2070,20 @@
       const ready = !!prod && prod.state === 'ready';
       const producing = prod ? (prod.state === 'ready' ? 1 : prod.state === 'producing' ? prod.progress || 0 : 0) : (ghost ? 1 : 0);
       const BA = PC.BUILD_ART;
-      if (BA && typeof BA.draw === 'function') BA.draw(ctx, art, fp, T, { alpha: alpha < 1 ? alpha : undefined, ghost: !!ghost, ready, producing, biome: park, level: o.level || 1 });
+      const artOpts = { ready, producing, biome: park, level: o.level || 1 }, drawn = !!BA && typeof BA.draw === 'function';
+      if (drawn) BA.draw(ctx, art, fp, T, Object.assign({ alpha: alpha < 1 ? alpha : undefined, ghost: !!ghost }, artOpts));
       else boxFallback(ctx, fp, 20 + 18 * Math.max(o.w, o.h), o.fixed ? '#c08a3e' : '#8fa6b8', alpha);
       const H = artHeight(art, o.w, o.h), d = o.gx + o.gy + (o.w + o.h) / 2;
       if (!ghost) {
         const inset = (fp.right[0] - fp.left[0]) * 0.12;
-        hitBoxes.push({ x0: fp.left[0] + inset, x1: fp.right[0] - inset, y0: fp.cy - H, y1: fp.cy, d, obj: o });
+        // the box is only a fallback: with building art, hitTest checks the drawn silhouette (BUILD_ART.hit)
+        hitBoxes.push({ x0: fp.left[0] + inset, x1: fp.right[0] - inset, y0: fp.cy - H, y1: fp.cy, d, obj: o, art: drawn ? art : null, fp, opts: artOpts });
       }
       if (ov && prod) {
         const top = fp.cy - H * 0.92;
         if (ready) ov.push({ type: 'res', obj: o, x: fp.cx, y: top - 22, icon: resIcon(prod.res) });
         else if (prod.state === 'producing') ov.push({ type: 'bar', x: fp.cx, y: top - 4, p: prod.progress || 0, rem: prod.remainingSec });
-        else if (prod.state === 'idle') ov.push({ type: 'idle', x: fp.cx, y: top - 10 });
+        else if (prod.state === 'idle') ov.push({ type: 'idle', obj: o, x: fp.cx, y: top - 10 });
       }
       if (ov && highlightId != null && o.id === highlightId && (o.level || 1) > 1 && !o.fixed) ov.push({ type: 'lvl', x: fp.bottom[0], y: fp.bottom[1] + 16, level: o.level });
     }
@@ -2143,6 +2150,7 @@
           rrect(ctx, b.x - w / 2, b.y - h / 2, w, h, 4 * k);
           ctx.fillStyle = '#f2c21b'; ctx.fill(); ctx.strokeStyle = '#1b1b1b'; ctx.lineWidth = 1.6; ctx.stroke();
           text(ctx, 'ACTIVER', b.x, b.y + 0.5, 10 * k, '#1b1b1b', null);
+          if (b.obj) hitBubbles.push({ x: b.x, y: b.y, hw: w / 2 + 6 * k, hh: h / 2 + 8 * k, obj: b.obj });   // tap → UI.tapBubble → order picker
         } else if (b.type === 'lvl') {
           const w = 50 * k, h = 18 * k;
           ctx.fillStyle = 'rgba(16,22,26,.88)'; rrect(ctx, b.x - w / 2, b.y - h / 2, w, h, 5 * k); ctx.fill();

@@ -26,7 +26,7 @@
   const RARITY_KEYS = ['commun', 'rare', 'super', 'legendaire', 'mythique'];
   const FB = {
     START: { coins: 6000, dollars: 25, food_land: 600, food_sea: 0, food_ice: 0, level: 1, xp: 0 },
-    XP: { feed: 4, collect: 1, creatureLevel: 10, researchAttempt: 20, researchSuccess: 50 },
+    XP: { feed: 4, feedPerFood: 0, collect: 1, creatureLevel: 10, researchAttempt: 20, researchSuccess: 50 },
     RESEARCH: {
       durationSec: { commun: 5, rare: 8, super: 12, legendaire: 18, mythique: 25 },
       boostCost: { dollars: 5 }, boostChance: 20, maxChance: 95,
@@ -36,8 +36,8 @@
     EXPEDITION: {
       durationSec: { commun: 60, rare: 120, super: 240, legendaire: 420, mythique: 600 },
       chance: { commun: 60, rare: 55, super: 45, legendaire: 40, mythique: 35 },
-      cost: { commun: 600, rare: 2500, super: 9000, legendaire: 25000, mythique: 60000 },
-      buyDollars: { commun: 3, rare: 6, super: 12, legendaire: 25, mythique: 40 },
+      cost: { commun: 600, rare: 2500, super: 9000, legendaire: 25000, mythique: 60000 }, costMult: 1,
+      buyDollars: { commun: 6, rare: 12, super: 25, legendaire: 45, mythique: 80 },
       vehicle: { land: 'Jeep d’exploration', sea: 'Sous-marin', ice: 'Chenillette des neiges' },
       promo: { everySec: 1800, durationSec: 300, discount: 0.3 },
     },
@@ -115,6 +115,16 @@
   const bdef = id => BLD()[id] || null;
   const spdef = id => (PC.SPECIES && typeof id === 'string' && Object.prototype.hasOwnProperty.call(PC.SPECIES, id) ? PC.SPECIES[id] : null);
   const missionsList = () => (Array.isArray(DATA().MISSIONS) ? DATA().MISSIONS : []);
+  const missionIdAt = i => { const d = missionsList()[i]; return d && d.id ? String(d.id) : null; };
+  /** Story index of a saved mission: by id when known, else through the original order (missions
+      added later carry `since`), so inserting missions never shifts an existing save. */
+  function savedMissionIndex(M) {
+    const list = missionsList();
+    if (typeof M.id === 'string') { const j = list.findIndex(d => d && d.id === M.id); if (j >= 0) return j; }
+    const legacy = list.filter(d => d && !d.since);
+    const old = clampInt(M.index, 0, legacy.length, 0);
+    return old >= legacy.length ? list.length : list.indexOf(legacy[old]);
+  }
   const stagesOf = p => ((DATA().BATTLE_STAGES && Array.isArray(DATA().BATTLE_STAGES[p])) ? DATA().BATTLE_STAGES[p] : []);
   const rarityIdx = r => { const order = PC.RARITY_ORDER || RARITY_KEYS; const i = order.indexOf(r); return i < 0 ? 0 : i; };
   function enclosureSize(park) {
@@ -122,6 +132,8 @@
     return [clampInt(s[0], 1, 8, 3), clampInt(s[1], 1, 8, 3)];
   }
   /** Round a price to a friendly value. */
+  /** French elision: « d’Archélon » / « de Stégosaure ». */
+  const deName = name => (/^[aeiouyéèêâîôh]/i.test(name) ? 'd’' : 'de ') + name;
   function niceRound(v) {
     v = Math.max(0, +v || 0);
     const step = v < 1000 ? 10 : v < 10000 ? 50 : 100;
@@ -204,7 +216,7 @@
       promo: null,
       promoNextAt: t + nonNeg(cfg('EXPEDITION').promo && cfg('EXPEDITION').promo.everySec, 1800) * 1000,
       offer: null,
-      mission: { index: 0, base: defaultCounters(), done: false },
+      mission: { index: 0, id: missionIdAt(0), base: defaultCounters(), done: false },
       sideMissions: [],
       battles: { land: 0, sea: 0, ice: 0 },
       medals: { land: {}, sea: {}, ice: {} },
@@ -580,10 +592,13 @@
   function ensureOffer(force) {
     if (!state) return false;
     const t = now(), O = cfg('OFFERS');
-    if (!force && state.offer && state.offer.until > t) return false;
+    const ahead = nonNeg(O.maxLevelAhead, 6);
+    // An offer far above the player's level (e.g. from an older save) is replaced right away.
+    const tooFar = id => { const sp = spdef(id); return !!sp && !ownsSpecies(id) && sp.level > state.player.level + ahead; };
+    if (!force && state.offer && state.offer.until > t && !(state.offer.speciesId && tooFar(state.offer.speciesId))) return false;
     const prev = state.offer && state.offer.speciesId;
-    let c = offerCandidates(nonNeg(O.maxLevelAhead, 6));
-    if (!c.length) c = offerCandidates(null).sort((a, b) => PC.SPECIES[a].level - PC.SPECIES[b].level).slice(0, 3);
+    // Only species close to the player's level: when none qualifies, no offer (retried in an hour).
+    let c = offerCandidates(ahead);
     if (c.length > 1) c = c.filter(id => id !== prev);
     const period = Math.max(60, nonNeg(O.rotateSec, 86400)) * 1000;
     if (!c.length) {
@@ -712,9 +727,13 @@
     }
     const stage = PC.stageForLevel(o.level);
     emit('feed', { park: f.park, obj: o, levelUp, stageUp, level: o.level, stage, prevStage, cost });
-    addXPRaw(xpCfg('feed') + (levelUp ? xpCfg('creatureLevel') : 0));
+    addXPRaw(feedXp(st.feedCost) + (levelUp ? xpCfg('creatureLevel') : 0));
     changed();
     return { ok: true, levelUp, stageUp, level: o.level, stage, cost };
+  }
+  /** Player XP for one feed: grows with the food spent (XP.feedPerFood), never below XP.feed. */
+  function feedXp(foodCost) {
+    return Math.max(xpCfg('feed'), Math.round(nonNeg(foodCost, 0) * xpCfg('feedPerFood')));
   }
   /** statsAt(...) of a creature plus stage, feeds, food resource and next feed cost. */
   function creatureStats(ref) {
@@ -864,7 +883,9 @@
     o.level = (o.level || 1) + 1;
     state.counters.upgrades++;
     emit('upgrade', { park: f.park, obj: o, level: o.level, cost });
-    addXPRaw(b.xp);
+    // XP grows with the price like the building's own XP (≈ coins / 40): coins piling up turn into levels.
+    const base = nonNeg(b.cost && b.cost.coins, 0) || 100;
+    addXPRaw(Math.max(nonNeg(b.xp, 0), Math.round(nonNeg(b.xp, 0) * nonNeg(cost.coins, 0) / base)));
     changed();
     return { ok: true, level: o.level, cost };
   }
@@ -1164,7 +1185,9 @@
     if (!sp || !state) return null;
     const E = eCfg(), r = sp.rarity;
     const pick = (tbl, d) => nonNeg(tbl && tbl[r], (FB.EXPEDITION[d] || {})[r] || 0);
-    const baseCost = Math.round(pick(E.cost, 'cost'));
+    // Never cheaper than decoding the DNA step by step: at least costMult × the species' research cost.
+    const resCost = sp.research ? nonNeg(sp.research.cost, 0) * nonNeg(E.costMult, 1) : 0;
+    const baseCost = Math.max(Math.round(pick(E.cost, 'cost')), resCost ? niceRound(resCost) : 0);
     const discount = promoDiscount('expedition');
     const coins = discount ? niceRound(baseCost * (1 - discount)) : baseCost;
     const pk = PARKS.includes(park) ? park : sp.park;
@@ -1317,7 +1340,9 @@
           break;
         }
         case 'creature_level':
-          for (const o of allObjects()) if (o.type === 'enclosure' && o.hatched && (!g.species || o.speciesId === g.species)) progress = Math.max(progress, o.level || 1);
+          for (const p of g.park ? [g.park] : PARKS) for (const o of (state.parks[p] || {}).objects || []) {
+            if (o.type === 'enclosure' && o.hatched && (!g.species || o.speciesId === g.species)) progress = Math.max(progress, o.level || 1);
+          }
           break;
         case 'battle_stage': progress = (state.battles || {})[g.park] || 0; break;
         case 'player_level': progress = state.player.level; break;
@@ -1341,7 +1366,7 @@
     if (!m) return fail('Toutes les missions sont terminées');
     if (!m.done) return fail('Mission pas encore terminée');
     const reward = clone(m.def.reward || {});
-    state.mission = { index: m.index + 1, base: clone(state.counters), done: false };
+    state.mission = { index: m.index + 1, id: missionIdAt(m.index + 1), base: clone(state.counters), done: false };
     giveRaw(reward);
     const next = mission();
     emit('mission', { mission: next ? next.def : null, index: m.index + 1, status: next ? 'new' : 'finished', previous: m.def });
@@ -1354,7 +1379,7 @@
     const S = DATA().SIDE_MISSIONS;
     return isObj(S) && Array.isArray(S.templates) && S.templates.length ? Object.assign({ count: 3 }, S) : FB.SIDE_MISSIONS;
   };
-  function sideNeedOk(need) {
+  function sideNeedOk(need, tpl) {
     const objs = [];
     for (const p of PARKS) if (state.parks[p].unlocked) for (const o of state.parks[p].objects) objs.push(o);
     switch (need) {
@@ -1363,10 +1388,20 @@
       case 'farm': return objs.some(o => o.type === 'building' && (bdef(o.buildingId) || {}).kind === 'food');
       case 'shop': return objs.some(o => o.type === 'building' && (bdef(o.buildingId) || {}).kind === 'coins');
       case 'hatch': return objs.some(o => o.type === 'enclosure' && !o.hatched) ||
-        Object.keys(PC.SPECIES || {}).some(id => speciesStatus(id).state === 'available');
+        Object.keys(PC.SPECIES || {}).some(id => {
+          // A limited offer only counts when the player can pay for it right now.
+          const st = speciesStatus(id);
+          return st.state === 'available' && (!st.offer || canAfford(st.price));
+        });
       case 'research': return Object.keys(PC.SPECIES || {}).some(id => ['research', 'researching'].includes(speciesStatus(id).state));
       case 'expedition': return expeditionTargets().length > 0;
       case 'upgrade': return objs.some(o => upgradeCost(o) !== null);
+      case 'farmroom': {
+        const max = Math.max(1, num(tpl && tpl.maxFarms, 4));
+        const isFarm = o => o.type === 'building' && (bdef(o.buildingId) || {}).kind === 'food';
+        return PARKS.some(p => state.parks[p].unlocked && state.parks[p].objects.filter(isFarm).length < max &&
+          Object.values(DATA().BUILDINGS || {}).some(b => b && b.park === p && b.kind === 'food' && !b.fixed && num(b.level, 1) <= state.player.level));
+      }
     }
     return true;
   }
@@ -1408,7 +1443,7 @@
   function genSide(exclude) {
     const S = sideCfg(), L = state.player.level;
     const ok = S.templates.filter(t => t && t.id && (t.minLevel || 1) <= L && !exclude.has(t.id) && GOAL_TYPES.includes((t.goal || {}).type));
-    const good = ok.filter(t => sideNeedOk(t.needs));
+    const good = ok.filter(t => sideNeedOk(t.needs, t));
     const pool = good.length ? good : ok.length ? ok : S.templates.filter(t => t && t.goal);
     if (!pool.length) return null;
     let total = 0;
@@ -1703,9 +1738,12 @@
   }
   function cleanSide(x, counters) {
     if (!isObj(x) || !isObj(x.goal) || !GOAL_TYPES.includes(x.goal.type)) return null;
+    // Follow the template's icon when it changed since the save (e.g. roads no longer use the ✓ icon).
+    const tpl = sideCfg().templates.find(t => t && t.id === x.tpl);
+    const icon = tpl && typeof tpl.icon === 'string' && tpl.icon !== 'food' ? tpl.icon : typeof x.icon === 'string' ? x.icon : 'star';
     return {
       id: String(x.id || 'side_' + Math.random().toString(36).slice(2)), tpl: String(x.tpl || x.goal.type),
-      icon: typeof x.icon === 'string' ? x.icon : 'star', npc: typeof x.npc === 'string' ? x.npc : 'tom',
+      icon, npc: typeof x.npc === 'string' ? x.npc : 'tom',
       title: typeof x.title === 'string' ? x.title : 'Mission secondaire', text: typeof x.text === 'string' ? x.text : '',
       goal: clone(x.goal), reward: cleanCost(x.reward, true) || {}, base: cleanBase(x.base, counters),
       done: !!x.done, createdAt: num(x.createdAt, 0),
@@ -1757,7 +1795,8 @@
     if (isObj(raw.offer) && spdef(raw.offer.speciesId) && finite(+raw.offer.until)) s.offer = { speciesId: raw.offer.speciesId, until: +raw.offer.until };
     s.counters = cleanCounters(raw.counters);
     const M = isObj(raw.mission) ? raw.mission : {};
-    s.mission = { index: clampInt(M.index, 0, missionsList().length, 0), base: cleanBase(M.base, s.counters), done: !!M.done };
+    const mi = savedMissionIndex(M);
+    s.mission = { index: mi, id: missionIdAt(mi), base: cleanBase(M.base, s.counters), done: !!M.done };
     s.sideMissions = (Array.isArray(raw.sideMissions) ? raw.sideMissions : []).map(v => cleanSide(v, s.counters)).filter(Boolean)
       .slice(0, clampInt(sideCfg().count, 0, 6, 3));
     for (const p of PARKS) {
@@ -1823,7 +1862,7 @@
         if (o.type === 'enclosure' && !o.hatched && finite(o.hatchAt) && o.hatchAt <= t && !notified.eggs.has(o.id)) {
           notified.eggs.add(o.id);
           any = true;
-          if (!silent) toast('L’œuf de ' + ((spdef(o.speciesId) || {}).name || 'créature') + ' est prêt à éclore !', 'good');
+          if (!silent) toast('L’œuf ' + deName((spdef(o.speciesId) || {}).name || 'créature') + ' est prêt à éclore !', 'good');
         } else if (o.type === 'building' && finite(o.readyAt) && o.readyAt <= t) {
           if (notified.ready.get(o.id) === o.readyAt) continue;
           notified.ready.set(o.id, o.readyAt);
